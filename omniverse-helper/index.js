@@ -29,7 +29,7 @@ const TRANSFER = 1;
 const MINT = 3;
 
 let api;
-let chainId;
+let chainId = 1;
 
 // Private key
 let secret = JSON.parse(fs.readFileSync('./.secret').toString());
@@ -38,9 +38,10 @@ let privateKeyBuffer = Buffer.from(utils.toByteArray(testAccountPrivateKey));
 let publicKeyBuffer = eccrypto.getPublic(privateKeyBuffer);
 let publicKey = '0x' + publicKeyBuffer.toString('hex').slice(2);
 
-async function init(chainName) {
+async function init() {
     // Construct
-    const wsProvider = new WsProvider('ws://3.74.157.177:9944');
+    // const wsProvider = new WsProvider('ws://3.74.157.177:9944');
+    const wsProvider = new WsProvider('ws://127.0.0.1:9944');
     api = await ApiPromise.create({ provider: wsProvider });
 
     // Do something
@@ -55,7 +56,7 @@ let signData = (hash, sk) => {
 }
 
 let getRawData = (txData) => {
-    let bData = Buffer.concat([Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'), Buffer.from(txData.chainId),
+    let bData = Buffer.concat([Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'), Buffer.from(new BN(txData.chainId).toString('hex').padStart(2, '0'), 'hex'),
         Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to), Buffer.from(txData.data.slice(2), 'hex')]);
     return bData;
 }
@@ -63,12 +64,12 @@ let getRawData = (txData) => {
 async function mint(to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
     let mintData = MintTokenOp.enc({
-        to: publicKey,
-        amount: amount,
+        to: utils.toByteArray(to),
+        amount: BigInt(amount),
       });
     let data = TokenOpcode.enc({
         op: MINT,
-        data: mintData,
+        data: Array.from(mintData),
     });
     let txData = {
         nonce: nonce,
@@ -80,35 +81,35 @@ async function mint(to, amount) {
     let bData = getRawData(txData);
     let hash = keccak256(bData);
     txData.signature = signData(hash, privateKeyBuffer);
-    console(txData);
+    console.log(txData);
 }
 
 async function transfer(to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
-    let mintData = TransferTokenOp.enc({
-        to: publicKey,
-        amount: amount,
+    let transferData = TransferTokenOp.enc({
+        to: utils.toByteArray(to),
+        amount: BigInt(amount),
       });
     let data = TokenOpcode.enc({
         op: TRANSFER,
-        data: mintData,
+        data: Array.from(transferData),
     });
     let txData = {
         nonce: nonce,
         chainId: chainId,
         from: publicKey,
         to: TOKEN_ID,
-        data: data,
+        data: Array.from(data),
     };
     let bData = getRawData(txData);
     let hash = keccak256(bData);
     txData.signature = signData(hash, privateKeyBuffer);
-    console(txData);
+    console.log(txData);
 }
 
 async function omniverseBalanceOf(pk) {
     let amount = await api.query.omniverseFactory.tokens(TOKEN_ID, pk);
-    console.log('amount', amount);
+    console.log('amount', amount.toHuman());
 }
 
 async function accountInfo() {
@@ -123,9 +124,9 @@ async function accountInfo() {
 
     program
         .version('0.1.0')
-        .option('-t, --transfer <chain name>,<pk>,<amount>', 'Transfer token', list)
-        .option('-m, --mint <chain name>,<pk>,<amount>', 'Mint token', list)
-        .option('-o, --omniBalance <chain name>,<pk>', 'Query the balance of the omniverse token', list)
+        .option('-t, --transfer <pk>,<amount>', 'Transfer token', list)
+        .option('-m, --mint <pk>,<amount>', 'Mint token', list)
+        .option('-o, --omniBalance <pk>', 'Query the balance of the omniverse token', list)
         .option('-s, --switch <index>', 'Switch the index of private key to be used')
         .option('-a, --account', 'Show the account information')
         .parse(process.argv);
@@ -134,37 +135,37 @@ async function accountInfo() {
         await accountInfo();
     }
     else if (program.opts().transfer) {
-        if (program.opts().transfer.length != 3) {
-            console.log('3 arguments are needed, but ' + program.opts().transfer.length + ' provided');
+        if (program.opts().transfer.length != 2) {
+            console.log('2 arguments are needed, but ' + program.opts().transfer.length + ' provided');
             return;
         }
         
-        if (!init(program.opts().transfer[0])) {
+        if (!await init()) {
             return;
         }
-        await transfer(program.opts().transfer[1], program.opts().transfer[2]);
+        await transfer(program.opts().transfer[0], program.opts().transfer[1]);
     }
     else if (program.opts().mint) {
-        if (program.opts().mint.length != 3) {
-            console.log('3 arguments are needed, but ' + program.opts().mint.length + ' provided');
+        if (program.opts().mint.length != 2) {
+            console.log('2 arguments are needed, but ' + program.opts().mint.length + ' provided');
             return;
         }
         
-        if (!init(program.opts().mint[0])) {
+        if (!await init()) {
             return;
         }
-        await mint(program.opts().mint[1], program.opts().mint[2]);
+        await mint(program.opts().mint[0], program.opts().mint[1]);
     }
     else if (program.opts().omniBalance) {
-        if (program.opts().omniBalance.length != 2) {
-            console.log('2 arguments are needed, but ' + program.opts().omniBalance.length + ' provided');
+        if (program.opts().omniBalance.length != 1) {
+            console.log('1 arguments are needed, but ' + program.opts().omniBalance.length + ' provided');
             return;
         }
         
-        if (!init(program.opts().omniBalance[0])) {
+        if (!await init()) {
             return;
         }
-        await omniverseBalanceOf(program.opts().omniBalance[1]);
+        await omniverseBalanceOf(program.opts().omniBalance[0]);
     }
     else if (program.opts().switch) {
         secret.index = parseInt(program.opts().switch);
