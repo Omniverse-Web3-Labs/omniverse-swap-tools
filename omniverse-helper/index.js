@@ -88,7 +88,7 @@ async function mint(to, amount) {
 async function transfer(to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
     let transferData = TransferTokenOp.enc({
-        to: utils.toByteArray(to),
+        to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
         amount: BigInt(amount),
       });
     let data = TokenOpcode.enc({
