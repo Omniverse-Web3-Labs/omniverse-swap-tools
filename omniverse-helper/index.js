@@ -14,16 +14,16 @@ const TokenOpcode = Struct({
 });
 
 const MintTokenOp = Struct({
-    to: Vector(u8),
+    to: Bytes(64),
     amount: u128,
 });
 
 const TransferTokenOp = Struct({
-    to: Vector(u8),
+    to: Bytes(64),
     amount: u128,
 });
 
-const TOKEN_ID = 'Skywalker';
+const TOKEN_ID = [1];
 
 const TRANSFER = 1;
 const MINT = 3;
@@ -64,9 +64,10 @@ let getRawData = (txData) => {
 async function mint(to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
     let mintData = MintTokenOp.enc({
-        to: utils.toByteArray(to),
+        to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
         amount: BigInt(amount),
       });
+    console.log('mintData', mintData);
     let data = TokenOpcode.enc({
         op: MINT,
         data: Array.from(mintData),
@@ -76,12 +77,12 @@ async function mint(to, amount) {
         chainId: chainId,
         from: publicKey,
         to: TOKEN_ID,
-        data: data,
+        data: utils.toHexString(Array.from(data)),
     };
     let bData = getRawData(txData);
     let hash = keccak256(bData);
     txData.signature = signData(hash, privateKeyBuffer);
-    console.log(txData);
+    console.log(txData, Array.from(data));
 }
 
 async function transfer(to, amount) {
@@ -99,7 +100,7 @@ async function transfer(to, amount) {
         chainId: chainId,
         from: publicKey,
         to: TOKEN_ID,
-        data: Array.from(data),
+        data: utils.toHexString(Array.from(data)),
     };
     let bData = getRawData(txData);
     let hash = keccak256(bData);
