@@ -5,7 +5,8 @@ const utils = require('./utils');
 const eccrypto = require('eccrypto');
 const keccak256 = require('keccak256');
 const secp256k1 = require('secp256k1');
-const { ApiPromise, WsProvider } = require('@polkadot/api');
+const { ApiPromise, HttpProvider } = require('@polkadot/api');
+const request = require('request');
 const { bool, _void, str, u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, Enum, Struct, Vector, Option, Bytes } = require('scale-ts');
 
 const TokenOpcode = Struct({
@@ -23,10 +24,12 @@ const TransferTokenOp = Struct({
     amount: u128,
 });
 
-const TOKEN_ID = [1];
+const TOKEN_ID = [4];
 
 const TRANSFER = 1;
 const MINT = 3;
+
+const FaucetSeviceUrl = 'http://3.74.157.177:7788';
 
 let api;
 let chainId = 1;
@@ -40,9 +43,8 @@ let publicKey = '0x' + publicKeyBuffer.toString('hex').slice(2);
 
 async function init() {
     // Construct
-    // const wsProvider = new WsProvider('ws://3.74.157.177:9944');
-    const wsProvider = new WsProvider('ws://127.0.0.1:9944');
-    api = await ApiPromise.create({ provider: wsProvider });
+    const httpProvider = new HttpProvider('http://3.74.157.177:9933');
+    api = await ApiPromise.create({ provider: httpProvider });
 
     // Do something
     console.log(api.genesisHash.toHex());
@@ -83,6 +85,27 @@ async function mint(to, amount) {
     let hash = keccak256(bData);
     txData.signature = signData(hash, privateKeyBuffer);
     console.log(txData, Array.from(data));
+}
+
+async function claim(tokenId) {
+    let options = {
+        url: FaucetSeviceUrl+ '/get_token?publicKey=' + publicKey + '&tokenId=' + tokenId,
+        method: "POST",
+    }
+    let result = await syncRequest(options);
+    console.log(result);
+}
+
+async function syncRequest(options) {
+    return new Promise(function (resolve, reject) {
+      request(options, function (error, response, body) {
+        if (!error && response.statusCode === 200) {
+          resolve(body);
+        } else {
+          reject(error);
+        }
+      });
+    });
 }
 
 async function transfer(to, amount) {
@@ -130,6 +153,7 @@ async function accountInfo() {
         .option('-o, --omniBalance <pk>', 'Query the balance of the omniverse token', list)
         .option('-s, --switch <index>', 'Switch the index of private key to be used')
         .option('-a, --account', 'Show the account information')
+        .option('-c, --claim <tokenId>', 'Get test token from faucet', list)
         .parse(process.argv);
 
     if (program.opts().account) {
@@ -171,5 +195,13 @@ async function accountInfo() {
     else if (program.opts().switch) {
         secret.index = parseInt(program.opts().switch);
         fs.writeFileSync('./.secret', JSON.stringify(secret, null, '\t'));
+    }
+    else if (program.opts().claim) {
+        if (program.opts().claim.length != 1) {
+            console.log('1 arguments are needed, but ' + program.opts().mint.length + ' provided');
+            return;
+        }
+        
+        await claim(program.opts().claim[0]);
     }
 }());
