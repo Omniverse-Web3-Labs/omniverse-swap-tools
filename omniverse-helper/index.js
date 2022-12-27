@@ -139,16 +139,24 @@ async function claim(tokenId) {
     console.log(result);
 }
 
-async function swapX2Y(tradingPair, tokenId, tokenSold, minToken) {
+async function swapX2Y(tradingPair, tokenSold) {
+    let [reverseX, reverseY] = (await api.query.omniverseSwap.tradingPairs(tradingPair)).toJSON();
+    let [tokenXIdHex, ] = (await api.query.omniverseSwap.tokenId(tradingPair)).toJSON();
+    let bought = parseInt((tokenSold * reverseY) / (parseInt(tokenSold) + reverseX));
+    let tokenId = Buffer.from(tokenXIdHex.replace('0x', ''), 'hex').toString('utf8');
     let tx = await transfer(tokenId, mpcPublicKey, tokenSold);
-    let result = await api.tx.omniverseSwap.swapX2y(tradingPair, tokenSold, minToken, tokenId, tx).signAndSend(sender);
+    let result = await api.tx.omniverseSwap.swapX2y(tradingPair, tokenSold, bought, tokenId, tx).signAndSend(sender);
     console.log(result.toJSON());
 }
 
-async function swapY2X(tradingPair, tokenId, tokenSold, minToken) {
+async function swapY2X(tradingPair, tokenSold) {
+    let [reverseX, reverseY] = (await api.query.omniverseSwap.tradingPairs(tradingPair)).toJSON();
+    let [, tokenYIdHex] = (await api.query.omniverseSwap.tokenId(tradingPair)).toJSON();
+    let bought = parseInt((parseInt(tokenSold) * reverseX) / (parseInt(tokenSold) + reverseY));
+    let tokenId = Buffer.from(tokenYIdHex.replace('0x', ''), 'hex').toString('utf8');
     let tx = await transfer(tokenId, mpcPublicKey, tokenSold);
-    let result = await api.tx.omniverseSwap.swapY2x(tradingPair, tokenSold, minToken, tokenId, tx);
-    console.log(result);
+    let result = await api.tx.omniverseSwap.swapY2x(tradingPair, tokenSold, bought, tokenId, tx).signAndSend(sender);
+    console.log(result.toJSON());
 }
 
 async function syncRequest(options) {
@@ -253,8 +261,8 @@ async function accountInfo() {
         .option('-s, --switch <index>', 'Switch the index of private key to be used')
         .option('-a, --account', 'Show the account information')
         .option('-c, --claim <tokenId>', 'Get test token from faucet', list)
-        .option('-x2y, --swapX2Y <tradingPair>,<XtokenId>,<soldAmount>,<getMinAmount>', 'Swap X token to Y token', list)
-        .option('-y2x, --swapY2X <tradingPair>,<YtokenId>,<soldAmount>,<getMinAmount>', 'Swap Y token to X token', list)
+        .option('-x2y, --swapX2Y <tradingPair>,<amount>', 'Swap `amount` X token to Y token', list)
+        .option('-y2x, --swapY2X <tradingPair>,<amount>', 'Swap `amount` Y token to X token', list)
         .parse(process.argv);
 
     if (program.opts().account) {
@@ -314,8 +322,8 @@ async function accountInfo() {
         await claim(program.opts().claim[0]);
     }
     else if (program.opts().swapX2Y) {
-        if (program.opts().swapX2Y.length != 4) {
-            console.log('4 arguments are needed, but ' + program.opts().omniBaswapX2Ylance.length + ' provided');
+        if (program.opts().swapX2Y.length != 2) {
+            console.log('2 arguments are needed, but ' + program.opts().swapX2Y.length + ' provided');
             return;
         }
 
@@ -323,6 +331,18 @@ async function accountInfo() {
             return;
         }
 
-        await swapX2Y(program.opts().swapX2Y[0], program.opts().swapX2Y[1], program.opts().swapX2Y[2], program.opts().swapX2Y[3]);
+        await swapX2Y(program.opts().swapX2Y[0], program.opts().swapX2Y[1]);
+    }
+    else if (program.opts().swapY2X) {
+        if (program.opts().swapY2X.length != 2) {
+            console.log('2 arguments are needed, but ' + program.opts().swapY2X.length + ' provided');
+            return;
+        }
+
+        if (!await init()) {
+            return;
+        }
+
+        await swapY2X(program.opts().swapY2X[0], program.opts().swapY2X[1]);
     }
 }());
