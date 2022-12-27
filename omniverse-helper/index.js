@@ -165,7 +165,7 @@ async function syncRequest(options) {
 
 async function transfer(tokenId, to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
-    // console.log(nonce);
+    console.log('nonce', nonce);
     // let nonce = 0;
     let transferData = TransferTokenOp.enc({
         to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
@@ -192,6 +192,9 @@ async function transfer(tokenId, to, amount) {
     console.log(txData.signature);
     // test end
 
+    let result = await api.tx.omniverseFactory.sendTransaction(tokenId, txData).signAndSend(sender);
+    console.log(result.toJSON());
+    
     return txData;
 }
 
