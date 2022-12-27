@@ -191,13 +191,46 @@ async function syncRequest(options) {
     });
 }
 
-async function generateTxData(tokenId, amount) {
-    return await transfer(tokenId, mpcPublicKey, amount);
+function _innerTransfer(tokenId, to, amount, nonce) {
+    let transferData = TransferTokenOp.enc({
+        to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
+        amount: BigInt(amount),
+      });
+    let data = TokenOpcode.enc({
+        op: TRANSFER,
+        data: Array.from(transferData),
+    });
+    let txData = {
+        nonce: nonce.toJSON(),
+        chainId: chainId,
+        from: publicKey,
+        to: tokenId,
+        data: utils.toHexString(Array.from(data)),
+    };
+    let bData = getRawData(txData);
+    let hash = keccak256(bData);
+    txData.signature = signData(hash, privateKeyBuffer);
+    console.log(txData);
+    // for test
+    console.log(bData.toString('hex'));
+    console.log(hash);
+    console.log('signature ', txData.signature);
+    // test end
+}
+
+async function generateTxData(XtokenId, Xamount, YtokenId, Yamount) {
+    let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
+
+    _innerTransfer(XtokenId, mpcPublicKey, Xamount, nonce);
+    
+    let nonce2 = nonce.add(new BN(1));
+    _innerTransfer(YtokenId, mpcPublicKey, Yamount, nonce2);
+
 }
 
 async function transfer(tokenId, to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
-    console.log('nonce', nonce);
+    // console.log('nonce', nonce);
     // let nonce = 0;
     let transferData = TransferTokenOp.enc({
         to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
@@ -372,7 +405,7 @@ async function accountInfo() {
         await swapY2X(program.opts().swapY2X[0], program.opts().swapY2X[1]);
     }
     else if (program.opts().generateTx) {
-        if (program.opts().generateTx.length != 2) {
+        if (program.opts().generateTx.length != 4) {
             console.log('2 arguments are needed, but ' + program.opts().generateTx.length + ' provided');
             return;
         }
@@ -381,6 +414,6 @@ async function accountInfo() {
             return;
         }
 
-        await generateTxData(program.opts().generateTx[0], program.opts().generateTx[1]);
+        await generateTxData(program.opts().generateTx[0], program.opts().generateTx[1], program.opts().generateTx[2], program.opts().generateTx[3]);
     }
 }());
