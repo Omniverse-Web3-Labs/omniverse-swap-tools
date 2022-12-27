@@ -39,7 +39,8 @@ const MINT = 3;
 const FaucetSeviceUrl = 'http://3.74.157.177:7788';
 
 let api;
-let chainId = 1;
+// EVM 0, Polkadot 1
+let chainId = 0;
 
 // Private key
 let secret = JSON.parse(fs.readFileSync('./.secret').toString());
@@ -73,7 +74,7 @@ let getRawData = (txData) => {
     // return bData;
 
     let bData = Buffer.concat([Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'), Buffer.from(new BN(txData.chainId).toString('hex').padStart(2, '0'), 'hex'),
-        Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to.replace('0x', ''), 'hex')]);
+        Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to.replace('0x', ''), 'utf-8')]);
 
     let tokenopcode = TokenOpcode.dec(txData.data);
     bData = Buffer.concat([bData, Buffer.from([tokenopcode.op])]);
@@ -125,8 +126,8 @@ async function mint(tokenId, to, amount) {
     console.log(txData.signature);
     // test end
 
-    // let result = await api.tx.omniverseFactory.sendTransaction(tokenId, txData).signAndSend(sender);
-    // console.log(result.toJSON());
+    let result = await api.tx.omniverseFactory.sendTransaction(tokenId, txData).signAndSend(sender);
+    console.log(result.toJSON());
 }
 
 async function claim(tokenId) {
@@ -164,6 +165,8 @@ async function syncRequest(options) {
 
 async function transfer(tokenId, to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
+    // console.log(nonce);
+    // let nonce = 0;
     let transferData = TransferTokenOp.enc({
         to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
         amount: BigInt(amount),
@@ -189,7 +192,7 @@ async function transfer(tokenId, to, amount) {
     console.log(txData.signature);
     // test end
 
-    // return txData;
+    return txData;
 }
 
 async function omniverseBalanceOf(tokenId, pk) {
