@@ -9,6 +9,13 @@ const { ApiPromise, HttpProvider } = require('@polkadot/api');
 const request = require('request');
 const { bool, _void, str, u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, Enum, Struct, Vector, Option, Bytes } = require('scale-ts');
 
+const {
+    encodeAddress, blake2AsU8a, blake2AsHex
+  } = require('@polkadot/util-crypto');
+
+// EVM
+const Web3 = require('web3')
+
 const TokenOpcode = Struct({
     op: u8,
     data: Vector(u8),
@@ -136,9 +143,35 @@ async function omniverseBalanceOf(pk) {
     console.log('amount', amount.toHuman());
 }
 
+async function getPublicKey(publicKey) {
+    // `publicKey` starts from `0x`
+    const pubKey = publicKey.substring(2);
+
+    const y = "0x" + pubKey.substring(64);
+    // console.log(y);
+
+    const _1n = BigInt(1);
+    let flag = BigInt(y) & _1n ? '03' : '02';
+    // console.log(flag);
+
+    const x = Buffer.from(pubKey.substring(0, 64), "hex");
+    // console.log(pubKey.substring(0, 64));
+    const finalX = Buffer.concat([Buffer.from([flag]), x]);
+    const finalXArray = new Uint8Array(finalX);
+    // console.log("Public Key: \n", finalXArray);
+    const addrHash = blake2AsHex(finalXArray);
+    return encodeAddress(addrHash);
+}
+
 async function accountInfo() {
     console.log('Private key', testAccountPrivateKey);
     console.log('Public key', publicKey);
+
+    console.log('Polkadot address', await getPublicKey(publicKey));
+    
+    const web3 = new Web3();
+    // const evmAddress = web3.eth.accounts.privateKeyToAccount(testAccountPrivateKey).address;
+    console.log('EVM address', web3.eth.accounts.privateKeyToAccount(testAccountPrivateKey).address);
 }
 
 (async function () {
