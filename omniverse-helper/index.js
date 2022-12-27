@@ -406,7 +406,7 @@ async function accountInfo() {
     }
     else if (program.opts().generateTx) {
         if (program.opts().generateTx.length != 4) {
-            console.log('2 arguments are needed, but ' + program.opts().generateTx.length + ' provided');
+            console.log('4 arguments are needed, but ' + program.opts().generateTx.length + ' provided');
             return;
         }
         
