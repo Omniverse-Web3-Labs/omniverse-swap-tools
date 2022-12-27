@@ -68,8 +68,31 @@ let signData = (hash, sk) => {
 }
 
 let getRawData = (txData) => {
+    // let bData = Buffer.concat([Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'), Buffer.from(new BN(txData.chainId).toString('hex').padStart(2, '0'), 'hex'),
+    //     Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to.replace('0x', ''), 'hex'), Buffer.from(txData.data.slice(2), 'hex')]);
+    // return bData;
+
     let bData = Buffer.concat([Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'), Buffer.from(new BN(txData.chainId).toString('hex').padStart(2, '0'), 'hex'),
-        Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to.replace('0x', ''), 'hex'), Buffer.from(txData.data.slice(2), 'hex')]);
+        Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to.replace('0x', ''), 'hex')]);
+
+    let tokenopcode = TokenOpcode.dec(txData.data);
+    bData = Buffer.concat([bData, Buffer.from([tokenopcode.op])]);
+    
+    // console.log(tokenopcode.op);
+
+    if (tokenopcode.op == MINT) {
+        // console.log(tokenopcode.data);
+        let mintData = MintTokenOp.dec(new Uint8Array(tokenopcode.data));
+        bData = Buffer.concat([bData, mintData.to]);
+        bData = Buffer.concat([bData, Buffer.from(new BN(mintData.amount).toString('hex').padStart(32, '0'), 'hex')]);
+    } else if (tokenopcode.op == TRANSFER){
+        let transferData = TransferTokenOp.dec(new Uint8Array(tokenopcode.data));
+        bData = Buffer.concat([bData, transferData.to]);
+        bData = Buffer.concat([bData, Buffer.from(new BN(transferData.amount).toString('hex').padStart(32, '0'), 'hex')]);
+    } else {
+        throw "Error token operation!";
+    }
+
     return bData;
 }
 
@@ -96,8 +119,14 @@ async function mint(tokenId, to, amount) {
     let hash = keccak256(bData);
     txData.signature = signData(hash, privateKeyBuffer);
     // console.log(txData, Array.from(data));
-    let result = await api.tx.omniverseFactory.sendTransaction(tokenId, txData).signAndSend(sender);
-    console.log(result.toJSON());
+    // for test
+    console.log(bData.toString('hex'));
+    console.log(hash);
+    console.log(txData.signature);
+    // test end
+
+    // let result = await api.tx.omniverseFactory.sendTransaction(tokenId, txData).signAndSend(sender);
+    // console.log(result.toJSON());
 }
 
 async function claim(tokenId) {
@@ -154,7 +183,13 @@ async function transfer(tokenId, to, amount) {
     let hash = keccak256(bData);
     txData.signature = signData(hash, privateKeyBuffer);
     // console.log(txData);
-    return txData;
+    // for test
+    console.log(bData.toString('hex'));
+    console.log(hash);
+    console.log(txData.signature);
+    // test end
+
+    // return txData;
 }
 
 async function omniverseBalanceOf(tokenId, pk) {
@@ -183,16 +218,23 @@ async function getPublicKey(publicKey) {
 }
 
 async function accountInfo() {
-    console.log('Private key', testAccountPrivateKey);
-    console.log('Public key', publicKey);
-
-    console.log('Substrate address', sender.address);
-
-    // console.log('Polkadot address', await getPublicKey(publicKey));
-    
     const web3 = new Web3();
-    // const evmAddress = web3.eth.accounts.privateKeyToAccount(testAccountPrivateKey).address;
-    console.log('EVM address', web3.eth.accounts.privateKeyToAccount(testAccountPrivateKey).address);
+
+    for (eleidx in secret.sks) {
+        console.log('##########################################################')
+        console.log('Account', eleidx);
+        console.log('Private key', secret.sks[eleidx]);
+
+        let skBuffer = Buffer.from(utils.toByteArray(secret.sks[eleidx]));
+        let pkBuffer = eccrypto.getPublic(skBuffer);
+        let pk = '0x' + pkBuffer.toString('hex').slice(2);
+        console.log('Omniverse Account', pk);
+
+        let subAccount = keyring.addFromSeed(skBuffer);
+        console.log('Substrate address', subAccount.address);
+
+        console.log('EVM address', web3.eth.accounts.privateKeyToAccount(secret.sks[eleidx]).address);
+    }
 }
 
 (async function () {
