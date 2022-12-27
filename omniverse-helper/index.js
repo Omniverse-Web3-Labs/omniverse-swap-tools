@@ -191,6 +191,10 @@ async function syncRequest(options) {
     });
 }
 
+async function generateTxData(tokenId, amount) {
+    return await transfer(tokenId, mpcPublicKey, amount);
+}
+
 async function transfer(tokenId, to, amount) {
     let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
     console.log('nonce', nonce);
@@ -213,11 +217,11 @@ async function transfer(tokenId, to, amount) {
     let bData = getRawData(txData);
     let hash = keccak256(bData);
     txData.signature = signData(hash, privateKeyBuffer);
-    // console.log(txData);
+    console.log(txData);
     // for test
     console.log(bData.toString('hex'));
     console.log(hash);
-    console.log(txData.signature);
+    console.log('signature ', txData.signature);
     // test end
 
     return txData;
@@ -275,12 +279,13 @@ async function accountInfo() {
 
     program
         .version('0.1.0')
-        .option('-t, --transfer <tokenId>,<pk>,<amount>', 'Transfer token', list)
-        .option('-m, --mint <tokenId>,<pk>,<amount>', 'Mint token', list)
-        .option('-o, --omniBalance <tokenId>,<pk>', 'Query the balance of the omniverse token', list)
+        .option('-t, --transfer <tokenId>,<o-account>,<amount>', 'Transfer token', list)
+        .option('-m, --mint <tokenId>,<o-account>,<amount>', 'Mint token', list)
+        .option('-o, --omniBalance <tokenId>,<o-account>', 'Query the balance of the omniverse token', list)
         .option('-s, --switch <index>', 'Switch the index of private key to be used')
         .option('-a, --account', 'Show the account information')
         .option('-c, --claim <tokenId>', 'Get test token from faucet', list)
+        .option('-g, --generateTx <tokenId>,<o-account>,<amount>', 'Generate a encapsulated Tx Data', list)
         .option('-x2y, --swapX2Y <tradingPair>,<amount>', 'Swap `amount` X token to Y token', list)
         .option('-y2x, --swapY2X <tradingPair>,<amount>', 'Swap `amount` Y token to X token', list)
         .parse(process.argv);
@@ -365,5 +370,17 @@ async function accountInfo() {
         }
 
         await swapY2X(program.opts().swapY2X[0], program.opts().swapY2X[1]);
+    }
+    else if (program.opts().generateTx) {
+        if (program.opts().generateTx.length != 2) {
+            console.log('2 arguments are needed, but ' + program.opts().generateTx.length + ' provided');
+            return;
+        }
+        
+        if (!await init()) {
+            return;
+        }
+
+        await generateTxData(program.opts().generateTx[0], program.opts().generateTx[1]);
     }
 }());
