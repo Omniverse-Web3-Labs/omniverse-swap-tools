@@ -40,7 +40,7 @@ const FaucetSeviceUrl = 'http://3.74.157.177:7788';
 
 let api;
 // EVM 0, Polkadot 1
-let chainId = 0;
+let chainId = 1;
 
 // Private key
 let secret = JSON.parse(fs.readFileSync('./.secret').toString());
