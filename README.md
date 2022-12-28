@@ -14,3 +14,5 @@ This project provides tools to make the Omniverse perations.
     ```sh
     node index.js --help
     ```
+
+***Note that the mpc account needs to use the one in [] ***
