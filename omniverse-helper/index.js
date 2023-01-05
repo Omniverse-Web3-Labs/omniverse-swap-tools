@@ -126,7 +126,7 @@ async function mint(tokenId, to, amount) {
     console.log(txData.signature);
     // test end
 
-    let result = await api.tx.omniverseFactory.sendTransaction(tokenId, txData).signAndSend(sender);
+    let result = await api.tx.assets.sendTransaction(tokenId, txData).signAndSend(sender);
     console.log(result.toJSON());
 }
 
@@ -261,7 +261,7 @@ async function transfer(tokenId, to, amount) {
 }
 
 async function omniverseBalanceOf(tokenId, pk) {
-    let amount = await api.query.omniverseFactory.tokens(tokenId, pk);
+    let amount = await api.query.assets.tokens(tokenId, pk);
     return amount;
 }
 
@@ -336,7 +336,7 @@ async function accountInfo() {
             return;
         }
         let tx = await transfer(program.opts().transfer[0], program.opts().transfer[1], program.opts().transfer[2]);
-        let result = await api.tx.omniverseFactory.sendTransaction(program.opts().transfer[0], tx).signAndSend(sender);
+        let result = await api.tx.assets.sendTransaction(program.opts().transfer[0], tx).signAndSend(sender);
         console.log(result.toJSON());
     }
     else if (program.opts().mint) {
