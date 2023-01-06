@@ -166,11 +166,13 @@ async function swapY2X(tradingPair, tokenSold) {
         return;
     }
     let [reverseX, reverseY] = pair;
+    reverseX = BigInt(reverseX);
+    reverseY = BigInt(reverseY);
     let [, tokenYIdHex] = (await api.query.omniverseSwap.tokenId(tradingPair)).toJSON();
-    let bought = parseInt((parseInt(tokenSold) * reverseX) / (parseInt(tokenSold) + reverseY));
+    let bought = (tokenSold * reverseX) / (tokenSold + reverseY);
     let tokenId = Buffer.from(tokenYIdHex.replace('0x', ''), 'hex').toString('utf8');
     let remainBalance = await omniverseBalanceOf(tokenId, publicKey);
-    if(remainBalance.toJSON() < Number(tokenSold)){
+    if(BigInt(remainBalance.toJSON()) < tokenSold){
         console.log('Token not enough.');
         return;
     }
@@ -402,7 +404,7 @@ async function accountInfo() {
             return;
         }
 
-        await swapY2X(program.opts().swapY2X[0], program.opts().swapY2X[1]);
+        await swapY2X(program.opts().swapY2X[0], BigInt(program.opts().swapY2X[1]));
     }
     else if (program.opts().generateTx) {
         if (program.opts().generateTx.length != 4) {
