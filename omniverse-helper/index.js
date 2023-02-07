@@ -24,6 +24,12 @@ const MintTokenOp = Struct({
   amount: u128,
 });
 
+const Fungible = Struct({
+  op: u8,
+  ex_data: Vector(u8),
+  amount: u128,
+})
+
 const TransferTokenOp = Struct({
   to: Bytes(64),
   amount: u128,
@@ -32,7 +38,7 @@ const TransferTokenOp = Struct({
 const TRANSFER = 1;
 const MINT = 3;
 
-const FaucetSeviceUrl = 'http://3.74.157.177:7788';
+const FaucetSeviceUrl = 'http://3.122.90.113:7788';
 
 let api;
 // EVM 0, Polkadot 1
@@ -50,7 +56,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
 
 async function init() {
   // Construct
-  const httpProvider = new HttpProvider('http://44.234.149.121:9933');
+  const httpProvider = new HttpProvider('http://3.122.90.113:9933');
   api = await ApiPromise.create({ provider: httpProvider });
 
   // Do something
@@ -75,18 +81,19 @@ let getRawData = (txData) => {
   let bData = Buffer.concat([
     Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'),
     Buffer.from(new BN(txData.chainId).toString('hex').padStart(8, '0'), 'hex'),
+    Buffer.from(txData.initiatorAddress.replace('0x', ''), 'hex'),
     Buffer.from(txData.from.slice(2), 'hex'),
-    // Buffer.from(txData.to.replace('0x', ''), 'utf-8'),
   ]);
+  console.log(bData);
 
-  // let tokenopcode = TokenOpcode.dec(txData.data);
-  bData = Buffer.concat([bData, Buffer.from([txData.opType])]);
+  let fungible = Fungible.dec(txData.payload);
+  bData = Buffer.concat([bData, Buffer.from([fungible.op])]);
 
-  bData = Buffer.concat([bData, new Uint8Array(Buffer.from(txData.opData.slice(2), 'hex'))]);
+  bData = Buffer.concat([bData, Buffer.from(fungible.ex_data)]);
   bData = Buffer.concat([
     bData,
     Buffer.from(
-      new BN(txData.amount).toString('hex').padStart(32, '0'),
+      new BN(fungible.amount).toString('hex').padStart(32, '0'),
       'hex'
     ),
   ]);
@@ -131,14 +138,17 @@ async function mint(tokenId, to, amount) {
   //   op: MINT,
   //   data: Array.from(mintData),
   // });
+  let payload = Fungible.enc({
+    op: MINT,
+    ex_data: Array.from(Buffer.from(to.slice(2), 'hex')),
+    amount: BigInt(amount)
+  })
   let txData = {
     nonce: nonce.toJSON(),
     chainId: chainId,
     initiatorAddress: '0x',
     from: publicKey,
-    opType: MINT,
-    opData: to,
-    amount: BigInt(amount),
+    payload: utils.toHexString(Array.from(payload)),
   };
   // console.log(Buffer.from(txData.to.replace('0x', ''), 'hex'));
   let bData = getRawData(txData);
