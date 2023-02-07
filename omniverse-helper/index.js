@@ -14,29 +14,15 @@ const { encodeAddress, blake2AsHex } = require('@polkadot/util-crypto');
 // EVM
 const Web3 = require('web3');
 
-const TokenOpcode = Struct({
-  op: u8,
-  data: Vector(u8),
-});
-
-const MintTokenOp = Struct({
-  to: Bytes(64),
-  amount: u128,
-});
-
 const Fungible = Struct({
   op: u8,
   ex_data: Vector(u8),
   amount: u128,
 });
 
-const TransferTokenOp = Struct({
-  to: Bytes(64),
-  amount: u128,
-});
-
 const TRANSFER = 0;
 const MINT = 1;
+const BURN = 2;
 
 const FaucetSeviceUrl = 'http://3.122.90.113:7788';
 
@@ -97,52 +83,17 @@ let getRawData = (txData) => {
       'hex'
     ),
   ]);
-  // console.log(tokenopcode.op);
-
-  // if (tokenopcode.op == MINT) {
-  //   // console.log(tokenopcode.data);
-  //   let mintData = MintTokenOp.dec(new Uint8Array(tokenopcode.data));
-  //   bData = Buffer.concat([bData, mintData.to]);
-  //   bData = Buffer.concat([
-  //     bData,
-  //     Buffer.from(
-  //       new BN(mintData.amount).toString('hex').padStart(32, '0'),
-  //       'hex'
-  //     ),
-  //   ]);
-  // } else if (tokenopcode.op == TRANSFER) {
-  //   let transferData = TransferTokenOp.dec(new Uint8Array(tokenopcode.data));
-  //   bData = Buffer.concat([bData, transferData.to]);
-  //   bData = Buffer.concat([
-  //     bData,
-  //     Buffer.from(
-  //       new BN(transferData.amount).toString('hex').padStart(32, '0'),
-  //       'hex'
-  //     ),
-  //   ]);
-  // } else {
-  //   throw 'Error token operation!';
-  // }
 
   return bData;
 };
 
-async function mint(tokenId, to, amount) {
+async function sendTransaction(tokenId, to, amount, op) {
   let nonce = await api.query.omniverseProtocol.transactionCount(
     publicKey,
     tokenId
   );
-  // let mintData = MintTokenOp.enc({
-  //   to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
-  //   amount: BigInt(amount),
-  // });
-  // // console.log('mintData', mintData);
-  // let data = TokenOpcode.enc({
-  //   op: MINT,
-  //   data: Array.from(mintData),
-  // });
   let payload = Fungible.enc({
-    op: MINT,
+    op: op,
     ex_data: Array.from(Buffer.from(to.slice(2), 'hex')),
     amount: BigInt(amount),
   });
@@ -205,7 +156,7 @@ async function swapX2Y(tradingPair, tokenSold) {
     console.log('Token not enough.');
     return;
   }
-  let tx = await transfer(tokenId, mpcPublicKey, tokenSold);
+  let tx = await transfer(mpcPublicKey, tokenSold);
   let result = await api.tx.omniverseSwap
     .swapX2y(tradingPair, tokenSold, bought, tokenId, tx)
     .signAndSend(sender);
@@ -233,7 +184,7 @@ async function swapY2X(tradingPair, tokenSold) {
     console.log('Token not enough.');
     return;
   }
-  let tx = await transfer(tokenId, mpcPublicKey, tokenSold);
+  let tx = await transfer(mpcPublicKey, tokenSold);
   let result = await api.tx.omniverseSwap
     .swapY2x(tradingPair, tokenSold, bought, tokenId, tx)
     .signAndSend(sender);
@@ -288,18 +239,8 @@ async function generateTxData(XtokenId, Xamount, YtokenId, Yamount) {
   _innerTransfer(YtokenId, mpcPublicKey, Yamount, nonce2);
 }
 
-async function transfer(tokenId, to, amount) {
+async function transfer(to, amount) {
   let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
-  // console.log('nonce', nonce);
-  // let nonce = 0;
-  // let transferData = TransferTokenOp.enc({
-  //   to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
-  //   amount: BigInt(amount),
-  // });
-  // let data = TokenOpcode.enc({
-  //   op: TRANSFER,
-  //   data: Array.from(transferData),
-  // });
   let txData = {
     nonce: nonce.toJSON(),
     chainId: chainId,
@@ -388,6 +329,7 @@ async function accountInfo() {
       'Query the balance of the omniverse token',
       list
     )
+    .option('-b, --burn <tokenId>,<o-account>,<amount>', 'Burn token', list)
     .option(
       '-s, --switch <index>',
       'Switch the index of private key to be used'
@@ -422,19 +364,15 @@ async function accountInfo() {
       );
       return;
     }
-
     if (!(await init())) {
       return;
     }
-    let tx = await transfer(
+    await sendTransaction(
       program.opts().transfer[0],
       program.opts().transfer[1],
-      program.opts().transfer[2]
+      program.opts().transfer[2],
+      TRANSFER
     );
-    let result = await api.tx.assets
-      .sendTransaction(program.opts().transfer[0], tx)
-      .signAndSend(sender);
-    console.log(result.toJSON());
   } else if (program.opts().mint) {
     if (program.opts().mint.length != 3) {
       console.log(
@@ -448,10 +386,30 @@ async function accountInfo() {
     if (!(await init())) {
       return;
     }
-    await mint(
+    await sendTransaction(
       program.opts().mint[0],
       program.opts().mint[1],
-      program.opts().mint[2]
+      program.opts().mint[2],
+      MINT
+    );
+  } else if (program.opts().burn) {
+    if (program.opts().burn.length != 3) {
+      console.log(
+        '3 arguments are needed, but ' +
+          program.opts().burn.length +
+          ' provided'
+      );
+      return;
+    }
+
+    if (!(await init())) {
+      return;
+    }
+    await sendTransaction(
+      program.opts().burn[0],
+      program.opts().burn[1],
+      program.opts().burn[2],
+      BURN
     );
   } else if (program.opts().omniBalance) {
     if (program.opts().omniBalance.length > 2) {
