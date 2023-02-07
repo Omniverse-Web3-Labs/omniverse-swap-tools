@@ -28,15 +28,15 @@ const Fungible = Struct({
   op: u8,
   ex_data: Vector(u8),
   amount: u128,
-})
+});
 
 const TransferTokenOp = Struct({
   to: Bytes(64),
   amount: u128,
 });
 
-const TRANSFER = 1;
-const MINT = 3;
+const TRANSFER = 0;
+const MINT = 1;
 
 const FaucetSeviceUrl = 'http://3.122.90.113:7788';
 
@@ -128,7 +128,10 @@ let getRawData = (txData) => {
 };
 
 async function mint(tokenId, to, amount) {
-  let nonce = await api.query.omniverseProtocol.transactionCount(publicKey, tokenId);
+  let nonce = await api.query.omniverseProtocol.transactionCount(
+    publicKey,
+    tokenId
+  );
   // let mintData = MintTokenOp.enc({
   //   to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
   //   amount: BigInt(amount),
@@ -141,8 +144,8 @@ async function mint(tokenId, to, amount) {
   let payload = Fungible.enc({
     op: MINT,
     ex_data: Array.from(Buffer.from(to.slice(2), 'hex')),
-    amount: BigInt(amount)
-  })
+    amount: BigInt(amount),
+  });
   let txData = {
     nonce: nonce.toJSON(),
     chainId: chainId,
@@ -304,7 +307,7 @@ async function transfer(tokenId, to, amount) {
     from: publicKey,
     opType: TRANSFER,
     opData: to,
-    amount: BigInt(amount)
+    amount: BigInt(amount),
   };
   let bData = getRawData(txData);
   let hash = keccak256(bData);
