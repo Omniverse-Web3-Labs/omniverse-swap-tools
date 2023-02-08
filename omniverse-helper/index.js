@@ -67,7 +67,7 @@ let getRawData = (txData) => {
   let bData = Buffer.concat([
     Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'),
     Buffer.from(new BN(txData.chainId).toString('hex').padStart(8, '0'), 'hex'),
-    Buffer.from(txData.initiatorAddress.replace('0x', ''), 'hex'),
+    Buffer.from(txData.initiatorAddress, 'utf-8'),
     Buffer.from(txData.from.slice(2), 'hex'),
   ]);
   console.log(bData);
@@ -100,7 +100,7 @@ async function sendTransaction(tokenId, to, amount, op) {
   let txData = {
     nonce: nonce.toJSON(),
     chainId: chainId,
-    initiatorAddress: '0x',
+    initiatorAddress: tokenId,
     from: publicKey,
     payload: utils.toHexString(Array.from(payload)),
   };
