@@ -87,9 +87,10 @@ let getRawData = (txData) => {
   return bData;
 };
 
-async function sendTransaction(tokenId, to, amount, op) {
+async function sendTransaction(tokenId, to, amount, op, palletName) {
   let nonce = await api.query.omniverseProtocol.transactionCount(
     publicKey,
+    palletName,
     tokenId
   );
   let payload = Fungible.enc({
@@ -115,7 +116,7 @@ async function sendTransaction(tokenId, to, amount, op) {
   console.log(txData.signature);
   // test end
   console.log(txData);
-  let result = await api.tx.assets
+  let result = await api.tx[palletName]
     .sendTransaction(tokenId, txData)
     .signAndSend(sender);
   console.log(result.toJSON());
@@ -351,7 +352,13 @@ async function accountInfo() {
       'Swap `amount` Y token to X token',
       list
     )
+    .option(
+      '-p, --pallet',
+      'pallet name'
+    )
     .parse(process.argv);
+    
+  let palletName = program.opts().pallet ? 'uniques' : 'assets';
 
   if (program.opts().account) {
     await accountInfo();
@@ -371,7 +378,8 @@ async function accountInfo() {
       program.opts().transfer[0],
       program.opts().transfer[1],
       program.opts().transfer[2],
-      TRANSFER
+      TRANSFER,
+      palletName
     );
   } else if (program.opts().mint) {
     if (program.opts().mint.length != 3) {
@@ -390,7 +398,8 @@ async function accountInfo() {
       program.opts().mint[0],
       program.opts().mint[1],
       program.opts().mint[2],
-      MINT
+      MINT,
+      palletName
     );
   } else if (program.opts().burn) {
     if (program.opts().burn.length != 3) {
@@ -409,7 +418,8 @@ async function accountInfo() {
       program.opts().burn[0],
       program.opts().burn[1],
       program.opts().burn[2],
-      BURN
+      BURN,
+      palletName
     );
   } else if (program.opts().omniBalance) {
     if (program.opts().omniBalance.length > 2) {
