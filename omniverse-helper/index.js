@@ -46,7 +46,7 @@ async function init() {
   api = await ApiPromise.create({ provider: httpProvider });
 
   // Do something
-  console.log(api.genesisHash.toHex());
+  // console.log(api.genesisHash.toHex());
 
   return true;
 }
@@ -116,24 +116,44 @@ async function sendTransaction(tokenId, to, amount, op, palletName) {
   console.log(txData.signature);
   // test end
   console.log(txData);
-  let result = await api.tx[palletName]
-    .sendTransaction(tokenId, txData)
-    .signAndSend(sender);
-  console.log(result.toJSON());
+  // let result = await api.tx[palletName]
+  //   .sendTransaction(tokenId, txData)
+  //   .signAndSend(sender);
+  // console.log(result.toJSON());
 }
 
-async function claim(tokenId) {
+async function claim(palletName, tokenId, itemId) {
   let options = {
     url:
       FaucetSeviceUrl +
       '/get_token?publicKey=' +
       publicKey +
       '&tokenId=' +
-      tokenId,
+      tokenId + 
+      '&pallet=' +
+      palletName +
+      '&itemId=' + 
+      itemId,
     method: 'POST',
   };
   let result = await syncRequest(options);
   console.log(result);
+}
+
+async function ownerOf(palletName, tokenId, itemId) {
+  var owner;
+  if (itemId) {
+    let itemInfo = (await api.query[palletName].asset(tokenId, itemId)).toJSON();
+    if (itemInfo) {
+      owner = itemInfo.owner;
+    }
+  } else {
+    let tokenInfo = (await api.query[palletName].tokensInfo(tokenId)).toJSON();
+    if (tokenInfo) {
+      owner = tokenInfo.owner
+    }
+  }
+  console.log('owner:', owner);
 }
 
 async function swapX2Y(tradingPair, tokenSold) {
@@ -264,8 +284,8 @@ async function transfer(to, amount) {
   return txData;
 }
 
-async function omniverseBalanceOf(tokenId, pk) {
-  let amount = await api.query.assets.tokens(tokenId, pk);
+async function omniverseBalanceOf(palletName, tokenId, pk) {
+  let amount = await api.query[palletName].tokens(tokenId, pk);
   return amount;
 }
 
@@ -336,7 +356,12 @@ async function accountInfo() {
       'Switch the index of private key to be used'
     )
     .option('-a, --account', 'Show the account information')
-    .option('-c, --claim <tokenId>', 'Get test token from faucet', list)
+    .option('-c, --claim <tokenId>,<itemId>', 'Get test token from faucet', list)
+    .option(
+      '-n, --ownerOf <tokenId>,<itemId>',
+      'Get the owner of FT or NFT (collection or item owner)',
+      list
+    )
     .option(
       '-g, --generateTx <tokenId>,<o-account>,<amount>',
       'Generate a encapsulated Tx Data',
@@ -441,6 +466,7 @@ async function accountInfo() {
       return;
     }
     let amount = await omniverseBalanceOf(
+      palletName,
       program.opts().omniBalance[0],
       account
     );
@@ -449,16 +475,50 @@ async function accountInfo() {
     secret.index = parseInt(program.opts().switch);
     fs.writeFileSync('./.secret', JSON.stringify(secret, null, '\t'));
   } else if (program.opts().claim) {
-    if (program.opts().claim.length != 1) {
-      console.log(
-        '1 arguments are needed, but ' +
-          program.opts().mint.length +
-          ' provided'
-      );
+    var itemId = null;
+    if (palletName == 'assets') {
+      if (program.opts().claim.length != 1) {
+        console.log(
+          '1 arguments are needed, but ' +
+            program.opts().claim.length +
+            ' provided'
+        );
+        return;
+      }
+    } else {
+      if (program.opts().claim.length != 2) {
+        console.log(
+          '2 arguments are needed, but ' +
+            program.opts().claim.length +
+            ' provided'
+        );
+        return;
+      }
+      itemId = program.opts().claim[1];
+    }
+    
+    await claim(palletName, program.opts().claim[0], itemId);
+  } else if (program.opts().ownerOf) {
+    if (!(await init())) {
       return;
     }
-
-    await claim(program.opts().claim[0]);
+    var itemId = null;
+    if (palletName == 'assets') {
+      if (program.opts().ownerOf.length != 1) {
+        console.log(
+          '1 arguments are needed, but ' +
+            program.opts().ownerOf.length +
+            ' provided'
+        );
+        return;
+      }
+    } else {
+      if (program.opts().ownerOf.length == 2) { 
+        itemId = program.opts().ownerOf[1];
+      }
+    }
+    
+    await ownerOf(palletName, program.opts().ownerOf[0], itemId);
   } else if (program.opts().swapX2Y) {
     if (program.opts().swapX2Y.length != 2) {
       console.log(
