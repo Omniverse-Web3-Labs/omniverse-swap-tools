@@ -116,10 +116,10 @@ async function sendTransaction(tokenId, to, amount, op, palletName) {
   console.log(txData.signature);
   // test end
   console.log(txData);
-  // let result = await api.tx[palletName]
-  //   .sendTransaction(tokenId, txData)
-  //   .signAndSend(sender);
-  // console.log(result.toJSON());
+  let result = await api.tx[palletName]
+    .sendTransaction(tokenId, txData)
+    .signAndSend(sender);
+  console.log(result.toJSON());
 }
 
 async function claim(palletName, tokenId, itemId) {
