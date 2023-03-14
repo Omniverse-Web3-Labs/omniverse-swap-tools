@@ -140,20 +140,18 @@ async function claim(palletName, tokenId, itemId) {
   console.log(result);
 }
 
-async function ownerOf(palletName, tokenId, itemId) {
-  var owner;
-  if (itemId) {
-    let itemInfo = (await api.query[palletName].asset(tokenId, itemId)).toJSON();
+async function ownerOf(tokenId, itemId) {
+  let collectionId = (await api.query.uniques.tokenId2CollectionId(tokenId)).toJSON();
+  if (collectionId) {
+    let itemInfo = (await api.query.uniques.asset(collectionId, itemId)).toJSON();
     if (itemInfo) {
-      owner = itemInfo.owner;
+      console.log('owner:', itemInfo.owner);
+    } else {
+      console.log('Item not exist.');
     }
   } else {
-    let tokenInfo = (await api.query[palletName].tokensInfo(tokenId)).toJSON();
-    if (tokenInfo) {
-      owner = tokenInfo.owner
-    }
+    console.log('Collection not exist.')
   }
-  console.log('owner:', owner);
 }
 
 async function swapX2Y(tradingPair, tokenSold) {
@@ -502,23 +500,15 @@ async function accountInfo() {
     if (!(await init())) {
       return;
     }
-    var itemId = null;
-    if (palletName == 'assets') {
-      if (program.opts().ownerOf.length != 1) {
-        console.log(
-          '1 arguments are needed, but ' +
-            program.opts().ownerOf.length +
-            ' provided'
-        );
-        return;
-      }
-    } else {
-      if (program.opts().ownerOf.length == 2) { 
-        itemId = program.opts().ownerOf[1];
-      }
+    if (program.opts().ownerOf.length != 2) {
+      console.log(
+        '2 arguments are needed, but ' +
+          program.opts().ownerOf.length +
+          ' provided'
+      );
+      return;
     }
-    
-    await ownerOf(palletName, program.opts().ownerOf[0], itemId);
+    await ownerOf(program.opts().ownerOf[0], program.opts().ownerOf[1]);
   } else if (program.opts().swapX2Y) {
     if (program.opts().swapX2Y.length != 2) {
       console.log(
