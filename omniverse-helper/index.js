@@ -9,8 +9,6 @@ const { ApiPromise, HttpProvider, Keyring } = require('@polkadot/api');
 const request = require('request');
 const { u8, u128, Struct, Vector, Bytes } = require('scale-ts');
 
-const { encodeAddress, blake2AsHex } = require('@polkadot/util-crypto');
-
 // EVM
 const Web3 = require('web3');
 
@@ -43,7 +41,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
 async function init() {
   // Construct
   const httpProvider = new HttpProvider('http://3.122.90.113:9933');
-  api = await ApiPromise.create({ provider: httpProvider });
+  api = await ApiPromise.create({ provider: httpProvider, noInitWarn: true});
 
   // Do something
   // console.log(api.genesisHash.toHex());
@@ -287,26 +285,6 @@ async function omniverseBalanceOf(palletName, tokenId, pk) {
   return amount;
 }
 
-async function getPublicKey(publicKey) {
-  // `publicKey` starts from `0x`
-  const pubKey = publicKey.substring(2);
-
-  const y = '0x' + pubKey.substring(64);
-  // console.log(y);
-
-  const _1n = BigInt(1);
-  let flag = BigInt(y) & _1n ? '03' : '02';
-  // console.log(flag);
-
-  const x = Buffer.from(pubKey.substring(0, 64), 'hex');
-  // console.log(pubKey.substring(0, 64));
-  const finalX = Buffer.concat([Buffer.from([flag]), x]);
-  const finalXArray = new Uint8Array(finalX);
-  // console.log("Public Key: \n", finalXArray);
-  const addrHash = blake2AsHex(finalXArray);
-  return encodeAddress(addrHash);
-}
-
 async function accountInfo() {
   const web3 = new Web3();
 
@@ -348,7 +326,7 @@ async function accountInfo() {
       'Query the balance of the omniverse token',
       list
     )
-    .option('-b, --burn <tokenId>,<o-account>,<amount>', 'Burn token', list)
+    .option('-b, --burn <tokenId>,<amount>', 'Burn token', list)
     .option(
       '-s, --switch <index>',
       'Switch the index of private key to be used'
@@ -357,7 +335,7 @@ async function accountInfo() {
     .option('-c, --claim <tokenId>,<itemId>', 'Get test token from faucet', list)
     .option(
       '-n, --ownerOf <tokenId>,<itemId>',
-      'Get the owner of FT or NFT (collection or item owner)',
+      'Get the owner of an item',
       list
     )
     .option(
@@ -425,7 +403,7 @@ async function accountInfo() {
       palletName
     );
   } else if (program.opts().burn) {
-    if (program.opts().burn.length != 3) {
+    if (program.opts().burn.length != 2) {
       console.log(
         '3 arguments are needed, but ' +
           program.opts().burn.length +
@@ -439,8 +417,8 @@ async function accountInfo() {
     }
     await sendTransaction(
       program.opts().burn[0],
+      '0x',
       program.opts().burn[1],
-      program.opts().burn[2],
       BURN,
       palletName
     );
