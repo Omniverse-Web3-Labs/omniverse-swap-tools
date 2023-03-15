@@ -1,4 +1,4 @@
-# omniverse-Operation-tools
+# Omniverse operation tools
 
 This project provides tools to make the Omniverse operations.
 
@@ -7,12 +7,13 @@ This project provides tools to make the Omniverse operations.
 * Clone this repo:
 
     ```sh
-    git clone https://github.com/virgil2019/omniverse-swap-tools/tree/web3-grant
+    git clone -b web3-grant https://github.com/Omniverse-Web3-Labs/omniverse-swap-tools.git
     ```
 
 * Install the dependent packages.
 
     ```sh
+    cd omniverse-swap-tools/omniverse-helper
     npm install
     ```
 
