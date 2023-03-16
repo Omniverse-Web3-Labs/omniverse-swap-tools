@@ -23,6 +23,14 @@ This project provides tools to make the Omniverse operations.
     node index.js --help
     ```
 
+## Import your private key
+
+```sh
+cp .secret-example .secret
+```
+
+Copy `.secret-example` as `.secret`, replace the contents of the `sks` with your private key.
+
 ## Operations
 
 ### Accounts
