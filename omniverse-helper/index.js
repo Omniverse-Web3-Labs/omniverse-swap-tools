@@ -22,7 +22,7 @@ const TRANSFER = 0;
 const MINT = 1;
 const BURN = 2;
 
-const FaucetSeviceUrl = 'http://3.122.90.113:7788';
+const FaucetSeviceUrl = 'http://35.158.224.2:7788';
 
 let api;
 // EVM 0, Polkadot 1
@@ -40,7 +40,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
 
 async function init() {
   // Construct
-  const httpProvider = new HttpProvider('http://3.122.90.113:9933');
+  const httpProvider = new HttpProvider('http://35.158.224.2:9911');
   api = await ApiPromise.create({ provider: httpProvider, noInitWarn: true});
 
   // Do something
