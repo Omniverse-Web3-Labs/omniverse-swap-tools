@@ -301,10 +301,16 @@ async function accountInfo() {
     let subAccount = keyring.addFromSeed(skBuffer);
     console.log('Substrate address', subAccount.address);
 
+    let evmAddress = web3.eth.accounts.privateKeyToAccount(secret.sks[eleidx]).address;
     console.log(
       'EVM address',
-      web3.eth.accounts.privateKeyToAccount(secret.sks[eleidx]).address
+      evmAddress
     );
+
+    console.log(
+      'PlatON address',
+      utils.EncodeAddress('lat', evmAddress)
+    )
   }
 }
 
