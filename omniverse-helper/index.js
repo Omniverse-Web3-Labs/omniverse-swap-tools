@@ -140,7 +140,7 @@ async function claim(palletName, tokenId, itemId) {
 
 async function ownerOf(tokenId, itemId) {
   let collectionId = (await api.query.uniques.tokenId2CollectionId(tokenId)).toJSON();
-  if (collectionId) {
+  if (collectionId != null) {
     let itemInfo = (await api.query.uniques.asset(collectionId, itemId)).toJSON();
     if (itemInfo) {
       console.log('owner:', itemInfo.owner);
