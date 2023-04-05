@@ -33,7 +33,9 @@ Copy `.secret-example` as `.secret`, replace the contents of the `sks` with your
 
 ## Operations
 
-**Note in the following FT `AMOUNT` is related to decimals, for example, if you want to transfer `1 FT`, the `AMOUNT` is `1 * 10^decimals`** The current decimal is `12`, which is not a standard and projects using their own `o-tokens` can set it as they wish.  
+- **Note that in the following FT `AMOUNT` is related to decimals, for example, if you want to transfer `1 FT`, the `AMOUNT` is `1 * 10^decimals`** The current decimal is `12`, which is not a standard and projects using their own `o-tokens` can set it as they wish.  
+
+- **Note that you need gas token of the Parachain first before operating, and you can get gas token according to [this guide](https://github.com/Omniverse-Web3-Labs/Omniverse-DLT-Introduction/tree/main/docs#get-gas-tokens)**
 
 ### Accounts
 
