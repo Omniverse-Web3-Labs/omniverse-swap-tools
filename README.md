@@ -84,7 +84,7 @@ amount [ '1' ]
 
 ### Faucet
 
-Get test omniverse token from faucet
+Get test omniverse token from faucet.
 
 ```sh
 # FT
@@ -99,7 +99,7 @@ node index.js -c skywal,5 -p uniques
 **Note that there needs to be a time before the faucet's arrival.**
 ### Mint
 
-Mint omniverse token
+Mint omniverse token.
 
 ```sh
 # FT
@@ -115,7 +115,7 @@ node index.js -m skywal,0xf4d2bbf5b74fb8f4f00b5c80da8d53xxxxxxxxxxxxxxxxxxxxxxxx
 
 ### Transfer
 
-Transfer the omniverse token, 
+Transfer the omniverse token.
 
 ```sh
 # FT
