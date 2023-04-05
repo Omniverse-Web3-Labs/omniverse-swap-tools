@@ -95,6 +95,8 @@ node index.js -c skywalker
 node index.js -c skywal,5 -p uniques
 ```
 
+**Note that there needs to be a time before the faucet's arrival.**
+
 ### Mint
 
 Mint omniverse token
@@ -145,3 +147,11 @@ Get the owner of an item
 # node index.js -m TOKEN_ID,ITEM_ID
 node index.js -n skywal,1
 ```
+
+## Configuration
+
+**Note that if you deployed your own `o-token`, remember to do the following steps first before making operations:**  
+
+- The [Faucet](#faucet) operation is **not available** for your own `o-token`, as it is just used for pre-deployed [`skywalker` and `skywal`](https://github.com/Omniverse-Web3-Labs/Omniverse-DLT-Introduction/blob/main/docs/README.md#evm-chains)  
+- Remember to change the IP address in the [`HttpProvider`](./omniverse-helper/index.js#L43) to your own deployed local `Substrate Parachain`  
+- Remember to import your test secret keys as mentioned [above](#import-your-private-key). As you may need to transfer your own `o-token` from one account to another, two secret keys is better, and follow the [Switch](#switch) operation to change the operation account.   
