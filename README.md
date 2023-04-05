@@ -111,6 +111,8 @@ node index.js -m skywalker,0xf4d2bbf5b74fb8f4f00b5c80da8d53xxxxxxxxxxxxxxxxxxxxx
 node index.js -m skywal,0xf4d2bbf5b74fb8f4f00b5c80da8d53xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx9dec9d6e642f25d03df00d222a3e365136e8f071c38a59294ccbaca3359ee152,5 -p uniques
 ```
 
+**Note that the operator of the `Mint` operation needs to be the owner who [creates](https://github.com/Omniverse-Web3-Labs/Omniverse-DLT-Introduction/blob/main/docs/Deployment.md#create-token) and [deployed](https://github.com/Omniverse-Web3-Labs/Omniverse-DLT-Introduction/blob/main/docs/Deployment.md#evm-compatible-chain) the `o-token`**  
+
 ### Transfer
 
 Transfer the omniverse token.
