@@ -33,6 +33,8 @@ Copy `.secret-example` as `.secret`, replace the contents of the `sks` with your
 
 ## Operations
 
+**Note in the following FT `AMOUNT` is related to decimals, for example, if you want to transfer `1 FT`, the `AMOUNT` is `1 * 10^decimals`** The current decimal is `12`, which is not a standard and projects using their own `o-tokens` can set it as they wish.  
+
 ### Accounts
 
 Show all accounts information.
@@ -63,7 +65,8 @@ The private key to be used will be switched according to the index.
 node index.js -s 1
 ```
 
-**Note in the following FT `AMOUNT` is related to decimals, for example, if you want to transfer `1 FT`, the `AMOUNT` is `1 * 10^decimals`**
+**Note that we have not provided a command to check the current operation account, and this information can be found in [secret.index](./omniverse-helper/.secret-example) in the `.secret` file.**
+
 ### Balance
 
 Get the balance of the omniverse token.
