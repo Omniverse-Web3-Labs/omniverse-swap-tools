@@ -40,7 +40,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
 
 async function init() {
   // Construct
-  const httpProvider = new HttpProvider('http://3.122.90.113:9933');
+  const httpProvider = new HttpProvider('http://127.0.0.1:9933');
   api = await ApiPromise.create({ provider: httpProvider, noInitWarn: true});
 
   // Do something
@@ -140,7 +140,7 @@ async function claim(palletName, tokenId, itemId) {
 
 async function ownerOf(tokenId, itemId) {
   let collectionId = (await api.query.uniques.tokenId2CollectionId(tokenId)).toJSON();
-  if (collectionId) {
+  if (collectionId != null) {
     let itemInfo = (await api.query.uniques.asset(collectionId, itemId)).toJSON();
     if (itemInfo) {
       console.log('owner:', itemInfo.owner);

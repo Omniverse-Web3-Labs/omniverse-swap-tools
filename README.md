@@ -33,6 +33,10 @@ Copy `.secret-example` as `.secret`, replace the contents of the `sks` with your
 
 ## Operations
 
+## Pre-deployed
+
+The pre-deployed [`HttpProvider`](./omniverse-helper/index.js#L43) needs to be set to `3.122.90.113:9933`  
+
 ### Accounts
 
 Show all accounts information.
