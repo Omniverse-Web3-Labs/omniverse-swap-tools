@@ -33,6 +33,10 @@ Copy `.secret-example` as `.secret`, replace the contents of the `sks` with your
 
 ## Operations
 
+- **Note that in the following FT `AMOUNT` is related to decimals, for example, if you want to transfer `1 FT`, the `AMOUNT` is `1 * 10^decimals`** The current decimal is `12`, which is not a standard and projects using their own `o-tokens` can set it as they wish.  
+
+- **Note that you need gas token of the Parachain first before operating, and you can get gas token according to [this guide](https://github.com/Omniverse-Web3-Labs/Omniverse-DLT-Introduction/tree/main/docs#get-gas-tokens)**
+
 ## Pre-deployed
 
 The pre-deployed [`HttpProvider`](./omniverse-helper/index.js#L43) needs to be set to `3.122.90.113:9933`  
@@ -67,16 +71,18 @@ The private key to be used will be switched according to the index.
 node index.js -s 1
 ```
 
+**Note that we have not provided a command to check the current operation account, and this information can be found in [secret.index](./omniverse-helper/.secret-example) in the `.secret` file.**
+
 ### Balance
 
 Get the balance of the omniverse token.
 
 ```sh
 # For FT
-# node index.js -o TOKEN_Id,O-ACCOUNT
+# node index.js -o TOKEN_Id,O-ACCOUNT, return FT AMOUNT (following example: AMOUNT is 1 skywalker, skywalker decimals is 12)
 node index.js -o skywalker,0xfb73e1e37a4999060a9a9b1e38a12f8a7cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxe4dcd28692ae02b7627c2aebafb443e9600e476b465da5c4dddbbc3f2782
 secp256k1 unavailable, reverting to browser version
-amount 10
+amount 1000000000000
 
 # For NFT
 # node index.js -o TOKEN_Id,O-ACCOUNT -p uniques, reture all items
@@ -87,7 +93,7 @@ amount [ '1' ]
 
 ### Faucet
 
-Get test omniverse token from faucet
+Get test omniverse token from faucet.
 
 ```sh
 # FT
@@ -100,15 +106,14 @@ node index.js -c skywal,5 -p uniques
 ```
 
 **Note that there needs to be a time before the faucet's arrival.**
-
 ### Mint
 
-Mint omniverse token
+Mint omniverse token.
 
 ```sh
 # FT
-# node index.js -m TOKEN_ID,O-ACCOUNT,AMOUNT
-node index.js -m skywalker,0xf4d2bbf5b74fb8f4f00b5c80da8d53xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx9dec9d6e642f25d03df00d222a3e365136e8f071c38a59294ccbaca3359ee152,10
+# node index.js -m TOKEN_ID,O-ACCOUNT,AMOUNT (following example: mint 2 skywalker, skywalker decimals is 12)
+node index.js -m skywalker,0xf4d2bbf5b74fb8f4f00b5c80da8d53xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx9dec9d6e642f25d03df00d222a3e365136e8f071c38a59294ccbaca3359ee152,2000000000000
 
 # NFT
 # node index.js -m TOKEN_ID,O-ACCOUNT,ITEM_ID -p uniques
@@ -123,8 +128,8 @@ Transfer the omniverse token.
 
 ```sh
 # FT
-# node index.js -t TOKEN_ID,O-ACCOUNT,AMOUNT
-node index.js -t skywalker,0x725ca9f9d8dcb1bf5d0003e76864612aa96470f2f7axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx3d21fed9e328f1b92f4cb1d7c2533552fdafb63f9f4b62d8f16,10
+# node index.js -t TOKEN_ID,O-ACCOUNT,AMOUNT (following example: transfer 1 skywalker, skywalker decimals is 12)
+node index.js -t skywalker,0x725ca9f9d8dcb1bf5d0003e76864612aa96470f2f7axxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx3d21fed9e328f1b92f4cb1d7c2533552fdafb63f9f4b62d8f16,1000000000000
 
 # NFT
 # node index.js -m TOKEN_ID,O-ACCOUNT,ITEM_ID -p uniques
@@ -137,8 +142,8 @@ Burn the omniverse token, only owner can burn himself token.
 
 ```sh
 # FT
-# node index.js -t TOKEN_ID,AMOUNT
-node index.js -t skywalker,10
+# node index.js -t TOKEN_ID,AMOUNT (following example: burn 1 skywalker, skywalker decimals is 12)
+node index.js -t skywalker,1000000000000
 
 # NFT
 # node index.js -m TOKEN_ID,ITEM_ID -p uniques
