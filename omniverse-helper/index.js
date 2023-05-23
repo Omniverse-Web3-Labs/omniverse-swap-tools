@@ -537,4 +537,5 @@ async function accountInfo() {
       program.opts().generateTx[3]
     );
   }
+  await api.disconnect();
 })();
