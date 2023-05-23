@@ -5,9 +5,10 @@ const utils = require('./utils');
 const eccrypto = require('eccrypto');
 const keccak256 = require('keccak256');
 const secp256k1 = require('secp256k1');
-const { ApiPromise, HttpProvider, Keyring } = require('@polkadot/api');
+const { ApiPromise, HttpProvider, Keyring, WsProvider } = require('@polkadot/api');
 const request = require('request');
 const { u8, u128, Struct, Vector, Bytes } = require('scale-ts');
+const config = require('config');
 
 // EVM
 const Web3 = require('web3');
@@ -25,8 +26,8 @@ const BURN = 2;
 const FaucetSeviceUrl = 'http://3.122.90.113:7788';
 
 let api;
-// EVM 0, Polkadot 1
-let chainId = 1;
+let chainId;
+let tokenId;
 
 // Private key
 let secret = JSON.parse(fs.readFileSync('./.secret').toString());
@@ -38,14 +39,12 @@ let publicKey = '0x' + publicKeyBuffer.toString('hex').slice(2);
 let keyring = new Keyring({ type: 'ecdsa' });
 let sender = keyring.addFromSeed(privateKeyBuffer);
 
-async function init() {
+async function init(chainName) {
   // Construct
-  const httpProvider = new HttpProvider('http://127.0.0.1:9933');
-  api = await ApiPromise.create({ provider: httpProvider, noInitWarn: true});
-
-  // Do something
-  // console.log(api.genesisHash.toHex());
-
+  const provider = new WsProvider(config.get(chainName).nodeAddress);
+  api = await ApiPromise.create({ provider, noInitWarn: true });
+  tokenId = config.get(chainName).tokenId;
+  chainId = config.get(chainName).omniverseChainId;
   return true;
 }
 
@@ -316,25 +315,25 @@ async function accountInfo() {
   program
     .version('0.1.0')
     .option(
-      '-t, --transfer <tokenId>,<o-account>,<amount>',
+      '-t, --transfer <chainName>,<o-account>,<amount>',
       'Transfer token',
       list
     )
-    .option('-m, --mint <tokenId>,<o-account>,<amount>', 'Mint token', list)
+    .option('-m, --mint <chainName>,<o-account>,<amount>', 'Mint token', list)
     .option(
-      '-o, --omniBalance <tokenId>,<o-account>',
+      '-o, --omniBalance <chainName>,<o-account>',
       'Query the balance of the omniverse token',
       list
     )
-    .option('-b, --burn <tokenId>,<amount>', 'Burn token', list)
+    .option('-b, --burn <chainName>,<tokenId>,<amount>', 'Burn token', list)
     .option(
       '-s, --switch <index>',
       'Switch the index of private key to be used'
     )
     .option('-a, --account', 'Show the account information')
-    .option('-c, --claim <tokenId>,<itemId>', 'Get test token from faucet', list)
+    .option('-c, --claim <chainName>,<tokenId>,<itemId>', 'Get test token from faucet', list)
     .option(
-      '-n, --ownerOf <tokenId>,<itemId>',
+      '-n, --ownerOf <chainName>,<tokenId>,<itemId>',
       'Get the owner of an item',
       list
     )
@@ -372,11 +371,11 @@ async function accountInfo() {
       );
       return;
     }
-    if (!(await init())) {
+    if (!(await init(program.opts().transfer[0]))) {
       return;
     }
     await sendTransaction(
-      program.opts().transfer[0],
+      tokenId,
       program.opts().transfer[1],
       program.opts().transfer[2],
       TRANSFER,
@@ -385,18 +384,18 @@ async function accountInfo() {
   } else if (program.opts().mint) {
     if (program.opts().mint.length != 3) {
       console.log(
-        '3 arguments are needed, but ' +
+        '4 arguments are needed, but ' +
           program.opts().mint.length +
           ' provided'
       );
       return;
     }
 
-    if (!(await init())) {
+    if (!(await init(program.opts().mint[0]))) {
       return;
     }
     await sendTransaction(
-      program.opts().mint[0],
+      tokenId,
       program.opts().mint[1],
       program.opts().mint[2],
       MINT,
@@ -438,12 +437,12 @@ async function accountInfo() {
       account = publicKey;
     }
 
-    if (!(await init())) {
+    if (!(await init(program.opts().omniBalance[0]))) {
       return;
     }
     let amount = await omniverseBalanceOf(
       palletName,
-      program.opts().omniBalance[0],
+      tokenId,
       account
     );
     console.log('amount', amount.toHuman());
