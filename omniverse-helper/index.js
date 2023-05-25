@@ -474,18 +474,20 @@ async function accountInfo() {
     
     await claim(palletName, program.opts().claim[0], itemId);
   } else if (program.opts().ownerOf) {
-    if (!(await init())) {
-      return;
-    }
-    if (program.opts().ownerOf.length != 2) {
+    if (program.opts().ownerOf.length != 3) {
       console.log(
-        '2 arguments are needed, but ' +
+        '3 arguments are needed, but ' +
           program.opts().ownerOf.length +
           ' provided'
       );
       return;
     }
-    await ownerOf(program.opts().ownerOf[0], program.opts().ownerOf[1]);
+
+    if (!(await init(program.opts().ownerOf[0]))) {
+      return;
+    }
+
+    await ownerOf(program.opts().ownerOf[1], program.opts().ownerOf[2]);
   } else if (program.opts().swapX2Y) {
     if (program.opts().swapX2Y.length != 2) {
       console.log(
