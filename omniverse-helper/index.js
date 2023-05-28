@@ -514,6 +514,7 @@ async function accountInfo() {
     }
 
     await ownerOf(program.opts().ownerOf[1], program.opts().ownerOf[2]);
+    await api.disconnect();
   } else if (program.opts().swapX2Y) {
     if (program.opts().swapX2Y.length != 2) {
       console.log(
