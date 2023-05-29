@@ -113,10 +113,35 @@ async function sendTransaction(tokenId, to, amount, op, palletName) {
   console.log(txData.signature);
   // test end
   console.log(txData);
-  let result = await api.tx[palletName]
+  await api.tx[palletName]
     .sendTransaction(tokenId, txData)
-    .signAndSend(sender);
-  console.log(result.toJSON());
+    .signAndSend(sender, async({ status, events }) => {
+      if (status.isInBlock || status.isFinalized) {
+        events
+          // find/filter for failed events
+          .filter(({ event }) =>
+            api.events.system.ExtrinsicFailed.is(event)
+          )
+          // we know that data for system.ExtrinsicFailed is
+          // (DispatchError, DispatchInfo)
+          .forEach(({ event: { data: [error, info] } }) => {
+            if (error.isModule) {
+              // for module errors, we have the section indexed, lookup
+              const decoded = api.registry.findMetaError(error.asModule);
+              const { docs, method, section } = decoded;
+  
+              console.log(`${section}.${method}: ${docs.join(' ')}`);
+            } else {
+              // Other, CannotLookup, BadOrigin, no extra info
+              console.log(error.toString());
+            }
+          });
+        if (status.isInBlock) {
+          await api.disconnect();
+        }
+      }
+    });
+  // console.log(result.toJSON());
 }
 
 async function claim(palletName, tokenId, itemId) {
@@ -446,6 +471,7 @@ async function accountInfo() {
       account
     );
     console.log('amount', amount.toHuman());
+    api.disconnect();
   } else if (program.opts().switch) {
     secret.index = parseInt(program.opts().switch);
     fs.writeFileSync('./.secret', JSON.stringify(secret, null, '\t'));
@@ -536,8 +562,5 @@ async function accountInfo() {
       program.opts().generateTx[2],
       program.opts().generateTx[3]
     );
-  }
-  if (api) {
-    await api.disconnect();
   }
 })();
