@@ -11,8 +11,9 @@
   "license": "ISC",
   "dependencies": {
     "@polkadot/api": "^9.10.3",
-    "@polkadot/util-crypto":"^10.2.1",
+    "@polkadot/util-crypto": "^10.2.1",
     "commander": "^9.4.1",
+    "config": "^3.3.9",
     "eccrypto": "^1.1.6",
     "keccak256": "^1.0.6",
     "request": "^2.88.2",

@@ -5,40 +5,29 @@ const utils = require('./utils');
 const eccrypto = require('eccrypto');
 const keccak256 = require('keccak256');
 const secp256k1 = require('secp256k1');
-const { ApiPromise, HttpProvider, Keyring } = require('@polkadot/api');
+const { ApiPromise, HttpProvider, Keyring, WsProvider } = require('@polkadot/api');
 const request = require('request');
-const { bool, _void, str, u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, Enum, Struct, Vector, Option, Bytes } = require('scale-ts');
-
-const {
-    encodeAddress, blake2AsU8a, blake2AsHex
-  } = require('@polkadot/util-crypto');
+const { u8, u128, Struct, Vector, Bytes } = require('scale-ts');
+const config = require('config');
 
 // EVM
-const Web3 = require('web3')
+const Web3 = require('web3');
 
-const TokenOpcode = Struct({
-    op: u8,
-    data: Vector(u8),
+const Fungible = Struct({
+  op: u8,
+  ex_data: Vector(u8),
+  amount: u128,
 });
 
-const MintTokenOp = Struct({
-    to: Bytes(64),
-    amount: u128,
-});
+const TRANSFER = 0;
+const MINT = 1;
+const BURN = 2;
 
-const TransferTokenOp = Struct({
-    to: Bytes(64),
-    amount: u128,
-});
-
-const TRANSFER = 1;
-const MINT = 3;
-
-const FaucetSeviceUrl = 'http://3.74.157.177:7788';
+const FaucetSeviceUrl = 'http://3.122.90.113:7788';
 
 let api;
-// EVM 0, Polkadot 1
-let chainId = 1;
+let chainId;
+let tokenId;
 
 // Private key
 let secret = JSON.parse(fs.readFileSync('./.secret').toString());
@@ -50,372 +39,530 @@ let publicKey = '0x' + publicKeyBuffer.toString('hex').slice(2);
 let keyring = new Keyring({ type: 'ecdsa' });
 let sender = keyring.addFromSeed(privateKeyBuffer);
 
-async function init() {
-    // Construct
-    const httpProvider = new HttpProvider('http://3.74.157.177:9933');
-    api = await ApiPromise.create({ provider: httpProvider });
-
-    // Do something
-    console.log(api.genesisHash.toHex());
-
-    return true;
+async function init(chainName) {
+  // Construct
+  const provider = new WsProvider(config.get(chainName).nodeAddress);
+  api = await ApiPromise.create({ provider, noInitWarn: true });
+  tokenId = config.get(chainName).tokenId;
+  chainId = config.get(chainName).omniverseChainId;
+  return true;
 }
 
 let signData = (hash, sk) => {
-    let signature = secp256k1.ecdsaSign(Uint8Array.from(hash), Uint8Array.from(sk));
-    return '0x' + Buffer.from(signature.signature).toString('hex') + (signature.recid == 0 ? '1b' : '1c');
-}
+  let signature = secp256k1.ecdsaSign(
+    Uint8Array.from(hash),
+    Uint8Array.from(sk)
+  );
+  return (
+    '0x' +
+    Buffer.from(signature.signature).toString('hex') +
+    (signature.recid == 0 ? '1b' : '1c')
+  );
+};
 
 let getRawData = (txData) => {
-    // let bData = Buffer.concat([Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'), Buffer.from(new BN(txData.chainId).toString('hex').padStart(2, '0'), 'hex'),
-    //     Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to.replace('0x', ''), 'hex'), Buffer.from(txData.data.slice(2), 'hex')]);
-    // return bData;
+  let bData = Buffer.concat([
+    Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'),
+    Buffer.from(new BN(txData.chainId).toString('hex').padStart(8, '0'), 'hex'),
+    Buffer.from(txData.initiatorAddress, 'utf-8'),
+    Buffer.from(txData.from.slice(2), 'hex'),
+  ]);
+  console.log(bData);
 
-    let bData = Buffer.concat([Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'), Buffer.from(new BN(txData.chainId).toString('hex').padStart(2, '0'), 'hex'),
-        Buffer.from(txData.from.slice(2), 'hex'), Buffer.from(txData.to.replace('0x', ''), 'utf-8')]);
+  let fungible = Fungible.dec(txData.payload);
+  bData = Buffer.concat([bData, Buffer.from([fungible.op])]);
 
-    let tokenopcode = TokenOpcode.dec(txData.data);
-    bData = Buffer.concat([bData, Buffer.from([tokenopcode.op])]);
-    
-    // console.log(tokenopcode.op);
+  bData = Buffer.concat([bData, Buffer.from(fungible.ex_data)]);
+  bData = Buffer.concat([
+    bData,
+    Buffer.from(
+      new BN(fungible.amount).toString('hex').padStart(32, '0'),
+      'hex'
+    ),
+  ]);
 
-    if (tokenopcode.op == MINT) {
-        // console.log(tokenopcode.data);
-        let mintData = MintTokenOp.dec(new Uint8Array(tokenopcode.data));
-        bData = Buffer.concat([bData, mintData.to]);
-        bData = Buffer.concat([bData, Buffer.from(new BN(mintData.amount).toString('hex').padStart(32, '0'), 'hex')]);
-    } else if (tokenopcode.op == TRANSFER){
-        let transferData = TransferTokenOp.dec(new Uint8Array(tokenopcode.data));
-        bData = Buffer.concat([bData, transferData.to]);
-        bData = Buffer.concat([bData, Buffer.from(new BN(transferData.amount).toString('hex').padStart(32, '0'), 'hex')]);
-    } else {
-        throw "Error token operation!";
-    }
+  return bData;
+};
 
-    return bData;
-}
-
-async function mint(tokenId, to, amount) {
-    let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
-    let mintData = MintTokenOp.enc({
-        to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
-        amount: BigInt(amount),
-      });
-    // console.log('mintData', mintData);
-    let data = TokenOpcode.enc({
-        op: MINT,
-        data: Array.from(mintData),
+async function sendTransaction(tokenId, to, amount, op, palletName) {
+  let nonce = await api.query.omniverseProtocol.transactionCount(
+    publicKey,
+    palletName,
+    tokenId
+  );
+  let payload = Fungible.enc({
+    op: op,
+    ex_data: Array.from(Buffer.from(to.slice(2), 'hex')),
+    amount: BigInt(amount),
+  });
+  let txData = {
+    nonce: nonce.toJSON(),
+    chainId: chainId,
+    initiatorAddress: tokenId,
+    from: publicKey,
+    payload: utils.toHexString(Array.from(payload)),
+  };
+  // console.log(Buffer.from(txData.to.replace('0x', ''), 'hex'));
+  let bData = getRawData(txData);
+  let hash = keccak256(bData);
+  txData.signature = signData(hash, privateKeyBuffer);
+  // console.log(txData, Array.from(data));
+  // for test
+  console.log(bData.toString('hex'));
+  console.log(hash);
+  console.log(txData.signature);
+  // test end
+  console.log(txData);
+  await api.tx[palletName]
+    .sendTransaction(tokenId, txData)
+    .signAndSend(sender, async({ status, events }) => {
+      if (status.isInBlock || status.isFinalized) {
+        events
+          // find/filter for failed events
+          .filter(({ event }) =>
+            api.events.system.ExtrinsicFailed.is(event)
+          )
+          // we know that data for system.ExtrinsicFailed is
+          // (DispatchError, DispatchInfo)
+          .forEach(({ event: { data: [error, info] } }) => {
+            if (error.isModule) {
+              // for module errors, we have the section indexed, lookup
+              const decoded = api.registry.findMetaError(error.asModule);
+              const { docs, method, section } = decoded;
+  
+              console.log(`${section}.${method}: ${docs.join(' ')}`);
+            } else {
+              // Other, CannotLookup, BadOrigin, no extra info
+              console.log(error.toString());
+            }
+          });
+        if (status.isInBlock) {
+          await api.disconnect();
+        }
+      }
     });
-    let txData = {
-        nonce: nonce.toJSON(),
-        chainId: chainId,
-        from: publicKey,
-        to: tokenId,
-        data: utils.toHexString(Array.from(data)),
-    };
-    // console.log(Buffer.from(txData.to.replace('0x', ''), 'hex'));
-    let bData = getRawData(txData);
-    let hash = keccak256(bData);
-    txData.signature = signData(hash, privateKeyBuffer);
-    // console.log(txData, Array.from(data));
-    // for test
-    console.log(bData.toString('hex'));
-    console.log(hash);
-    console.log(txData.signature);
-    // test end
-
-    let result = await api.tx.assets.sendTransaction(tokenId, txData).signAndSend(sender);
-    console.log(result.toJSON());
+  // console.log(result.toJSON());
 }
 
-async function claim(tokenId) {
-    let options = {
-        url: FaucetSeviceUrl+ '/get_token?publicKey=' + publicKey + '&tokenId=' + tokenId,
-        method: "POST",
+async function claim(palletName, tokenId, itemId) {
+  let options = {
+    url:
+      FaucetSeviceUrl +
+      '/get_token?publicKey=' +
+      publicKey +
+      '&tokenId=' +
+      tokenId + 
+      '&pallet=' +
+      palletName +
+      '&itemId=' + 
+      itemId,
+    method: 'POST',
+  };
+  let result = await syncRequest(options);
+  console.log(result);
+}
+
+async function ownerOf(tokenId, itemId) {
+  let collectionId = (await api.query.uniques.tokenId2CollectionId(tokenId)).toJSON();
+  if (collectionId != null) {
+    let itemInfo = (await api.query.uniques.asset(collectionId, itemId)).toJSON();
+    if (itemInfo) {
+      console.log('owner:', itemInfo.owner);
+    } else {
+      console.log('Item not exist.');
     }
-    let result = await syncRequest(options);
-    console.log(result);
+  } else {
+    console.log('Collection not exist.')
+  }
 }
 
 async function swapX2Y(tradingPair, tokenSold) {
-    let pair = (await api.query.omniverseSwap.tradingPairs(tradingPair)).toJSON();
-    if (!pair) {
-        console.log('Trading pair not exist.');
-        return;
-    }
-    let [reverseX, reverseY] = pair;
-    reverseX = BigInt(reverseX);
-    reverseY = BigInt(reverseY);
-    let [tokenXIdHex, ] = (await api.query.omniverseSwap.tokenId(tradingPair)).toJSON();
-    let bought = (tokenSold * reverseY) / (tokenSold + reverseX);
-    let tokenId = Buffer.from(tokenXIdHex.replace('0x', ''), 'hex').toString('utf8');
-    let remainBalance = await omniverseBalanceOf(tokenId, publicKey);
-    if(BigInt(remainBalance.toJSON()) < tokenSold){
-        console.log('Token not enough.');
-        return;
-    }
-    let tx = await transfer(tokenId, mpcPublicKey, tokenSold);
-    let result = await api.tx.omniverseSwap.swapX2y(tradingPair, tokenSold, bought, tokenId, tx).signAndSend(sender);
-    console.log(result.toJSON());
+  let pair = (await api.query.omniverseSwap.tradingPairs(tradingPair)).toJSON();
+  if (!pair) {
+    console.log('Trading pair not exist.');
+    return;
+  }
+  let [reverseX, reverseY] = pair;
+  reverseX = BigInt(reverseX);
+  reverseY = BigInt(reverseY);
+  let [tokenXIdHex] = (
+    await api.query.omniverseSwap.tokenId(tradingPair)
+  ).toJSON();
+  let bought = (tokenSold * reverseY) / (tokenSold + reverseX);
+  let tokenId = Buffer.from(tokenXIdHex.replace('0x', ''), 'hex').toString(
+    'utf8'
+  );
+  let remainBalance = await omniverseBalanceOf(tokenId, publicKey);
+  if (BigInt(remainBalance.toJSON()) < tokenSold) {
+    console.log('Token not enough.');
+    return;
+  }
+  let tx = await transfer(mpcPublicKey, tokenSold);
+  let result = await api.tx.omniverseSwap
+    .swapX2y(tradingPair, tokenSold, bought, tokenId, tx)
+    .signAndSend(sender);
+  console.log(result.toJSON());
 }
 
 async function swapY2X(tradingPair, tokenSold) {
-    let pair = (await api.query.omniverseSwap.tradingPairs(tradingPair)).toJSON();
-    if (!pair) {
-        console.log('Trading pair not exist.');
-        return;
-    }
-    let [reverseX, reverseY] = pair;
-    reverseX = BigInt(reverseX);
-    reverseY = BigInt(reverseY);
-    let [, tokenYIdHex] = (await api.query.omniverseSwap.tokenId(tradingPair)).toJSON();
-    let bought = (tokenSold * reverseX) / (tokenSold + reverseY);
-    let tokenId = Buffer.from(tokenYIdHex.replace('0x', ''), 'hex').toString('utf8');
-    let remainBalance = await omniverseBalanceOf(tokenId, publicKey);
-    if(BigInt(remainBalance.toJSON()) < tokenSold){
-        console.log('Token not enough.');
-        return;
-    }
-    let tx = await transfer(tokenId, mpcPublicKey, tokenSold);
-    let result = await api.tx.omniverseSwap.swapY2x(tradingPair, tokenSold, bought, tokenId, tx).signAndSend(sender);
-    console.log(result.toJSON());
+  let pair = (await api.query.omniverseSwap.tradingPairs(tradingPair)).toJSON();
+  if (!pair) {
+    console.log('Trading pair not exist.');
+    return;
+  }
+  let [reverseX, reverseY] = pair;
+  reverseX = BigInt(reverseX);
+  reverseY = BigInt(reverseY);
+  let [, tokenYIdHex] = (
+    await api.query.omniverseSwap.tokenId(tradingPair)
+  ).toJSON();
+  let bought = (tokenSold * reverseX) / (tokenSold + reverseY);
+  let tokenId = Buffer.from(tokenYIdHex.replace('0x', ''), 'hex').toString(
+    'utf8'
+  );
+  let remainBalance = await omniverseBalanceOf(tokenId, publicKey);
+  if (BigInt(remainBalance.toJSON()) < tokenSold) {
+    console.log('Token not enough.');
+    return;
+  }
+  let tx = await transfer(mpcPublicKey, tokenSold);
+  let result = await api.tx.omniverseSwap
+    .swapY2x(tradingPair, tokenSold, bought, tokenId, tx)
+    .signAndSend(sender);
+  console.log(result.toJSON());
 }
 
 async function syncRequest(options) {
-    return new Promise(function (resolve, reject) {
-      request(options, function (error, response, body) {
-        if (!error && response.statusCode === 200) {
-          resolve(body);
-        } else {
-          reject(error);
-        }
-      });
+  return new Promise(function (resolve, reject) {
+    request(options, function (error, response, body) {
+      if (!error && response.statusCode === 200) {
+        resolve(body);
+      } else {
+        reject(error);
+      }
     });
+  });
 }
 
 function _innerTransfer(tokenId, to, amount, nonce) {
-    let transferData = TransferTokenOp.enc({
-        to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
-        amount: BigInt(amount),
-      });
-    let data = TokenOpcode.enc({
-        op: TRANSFER,
-        data: Array.from(transferData),
-    });
-    let txData = {
-        nonce: nonce.toJSON(),
-        chainId: chainId,
-        from: publicKey,
-        to: tokenId,
-        data: utils.toHexString(Array.from(data)),
-    };
-    let bData = getRawData(txData);
-    let hash = keccak256(bData);
-    txData.signature = signData(hash, privateKeyBuffer);
-    console.log(txData);
-    // for test
-    console.log(bData.toString('hex'));
-    console.log(hash);
-    console.log('signature ', txData.signature);
-    // test end
+  let transferData = TransferTokenOp.enc({
+    to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
+    amount: BigInt(amount),
+  });
+  let data = TokenOpcode.enc({
+    op: TRANSFER,
+    data: Array.from(transferData),
+  });
+  let txData = {
+    nonce: nonce.toJSON(),
+    chainId: chainId,
+    from: publicKey,
+    to: tokenId,
+    data: utils.toHexString(Array.from(data)),
+  };
+  let bData = getRawData(txData);
+  let hash = keccak256(bData);
+  txData.signature = signData(hash, privateKeyBuffer);
+  console.log(txData);
+  // for test
+  console.log(bData.toString('hex'));
+  console.log(hash);
+  console.log('signature ', txData.signature);
+  // test end
 }
 
 async function generateTxData(XtokenId, Xamount, YtokenId, Yamount) {
-    let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
+  let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
 
-    _innerTransfer(XtokenId, mpcPublicKey, Xamount, nonce);
-    
-    let nonce2 = nonce.add(new BN(1));
-    _innerTransfer(YtokenId, mpcPublicKey, Yamount, nonce2);
+  _innerTransfer(XtokenId, mpcPublicKey, Xamount, nonce);
 
+  let nonce2 = nonce.add(new BN(1));
+  _innerTransfer(YtokenId, mpcPublicKey, Yamount, nonce2);
 }
 
-async function transfer(tokenId, to, amount) {
-    let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
-    // console.log('nonce', nonce);
-    // let nonce = 0;
-    let transferData = TransferTokenOp.enc({
-        to: new Uint8Array(Buffer.from(to.slice(2), 'hex')),
-        amount: BigInt(amount),
-      });
-    let data = TokenOpcode.enc({
-        op: TRANSFER,
-        data: Array.from(transferData),
-    });
-    let txData = {
-        nonce: nonce.toJSON(),
-        chainId: chainId,
-        from: publicKey,
-        to: tokenId,
-        data: utils.toHexString(Array.from(data)),
-    };
-    let bData = getRawData(txData);
-    let hash = keccak256(bData);
-    txData.signature = signData(hash, privateKeyBuffer);
-    console.log(txData);
-    // for test
-    console.log(bData.toString('hex'));
-    console.log(hash);
-    console.log('signature ', txData.signature);
-    // test end
+async function transfer(to, amount) {
+  let nonce = await api.query.omniverseProtocol.transactionCount(publicKey);
+  let txData = {
+    nonce: nonce.toJSON(),
+    chainId: chainId,
+    initiatorAddress: '0x',
+    from: publicKey,
+    opType: TRANSFER,
+    opData: to,
+    amount: BigInt(amount),
+  };
+  let bData = getRawData(txData);
+  let hash = keccak256(bData);
+  txData.signature = signData(hash, privateKeyBuffer);
+  console.log(txData);
+  // for test
+  console.log(bData.toString('hex'));
+  console.log(hash);
+  console.log('signature ', txData.signature);
+  // test end
 
-    return txData;
+  return txData;
 }
 
-async function omniverseBalanceOf(tokenId, pk) {
-    let amount = await api.query.assets.tokens(tokenId, pk);
-    return amount;
-}
-
-async function getPublicKey(publicKey) {
-    // `publicKey` starts from `0x`
-    const pubKey = publicKey.substring(2);
-
-    const y = "0x" + pubKey.substring(64);
-    // console.log(y);
-
-    const _1n = BigInt(1);
-    let flag = BigInt(y) & _1n ? '03' : '02';
-    // console.log(flag);
-
-    const x = Buffer.from(pubKey.substring(0, 64), "hex");
-    // console.log(pubKey.substring(0, 64));
-    const finalX = Buffer.concat([Buffer.from([flag]), x]);
-    const finalXArray = new Uint8Array(finalX);
-    // console.log("Public Key: \n", finalXArray);
-    const addrHash = blake2AsHex(finalXArray);
-    return encodeAddress(addrHash);
+async function omniverseBalanceOf(palletName, tokenId, pk) {
+  let amount = await api.query[palletName].tokens(tokenId, pk);
+  return amount;
 }
 
 async function accountInfo() {
-    const web3 = new Web3();
+  const web3 = new Web3();
 
-    for (eleidx in secret.sks) {
-        console.log('##########################################################')
-        console.log('Account', eleidx);
-        console.log('Private key', secret.sks[eleidx]);
+  for (eleidx in secret.sks) {
+    console.log('##########################################################');
+    console.log('Account', eleidx);
+    console.log('Private key', secret.sks[eleidx]);
 
-        let skBuffer = Buffer.from(utils.toByteArray(secret.sks[eleidx]));
-        let pkBuffer = eccrypto.getPublic(skBuffer);
-        let pk = '0x' + pkBuffer.toString('hex').slice(2);
-        console.log('Omniverse Account', pk);
+    let skBuffer = Buffer.from(utils.toByteArray(secret.sks[eleidx]));
+    let pkBuffer = eccrypto.getPublic(skBuffer);
+    let pk = '0x' + pkBuffer.toString('hex').slice(2);
+    console.log('Omniverse Account', pk);
 
-        let subAccount = keyring.addFromSeed(skBuffer);
-        console.log('Substrate address', subAccount.address);
+    let subAccount = keyring.addFromSeed(skBuffer);
+    console.log('Substrate address', subAccount.address);
 
-        console.log('EVM address', web3.eth.accounts.privateKeyToAccount(secret.sks[eleidx]).address);
-    }
+    console.log(
+      'EVM address',
+      web3.eth.accounts.privateKeyToAccount(secret.sks[eleidx]).address
+    );
+  }
 }
 
 (async function () {
-    function list(val) {
-		return val.split(',')
-	}
+  function list(val) {
+    return val.split(',');
+  }
 
-    program
-        .version('0.1.0')
-        .option('-t, --transfer <tokenId>,<o-account>,<amount>', 'Transfer token', list)
-        .option('-m, --mint <tokenId>,<o-account>,<amount>', 'Mint token', list)
-        .option('-o, --omniBalance <tokenId>,<o-account>', 'Query the balance of the omniverse token', list)
-        .option('-s, --switch <index>', 'Switch the index of private key to be used')
-        .option('-a, --account', 'Show the account information')
-        .option('-c, --claim <tokenId>', 'Get test token from faucet', list)
-        .option('-g, --generateTx <tokenId>,<o-account>,<amount>', 'Generate a encapsulated Tx Data', list)
-        .option('-x2y, --swapX2Y <tradingPair>,<amount>', 'Swap `amount` X token to Y token', list)
-        .option('-y2x, --swapY2X <tradingPair>,<amount>', 'Swap `amount` Y token to X token', list)
-        .parse(process.argv);
+  program
+    .version('0.1.0')
+    .option(
+      '-t, --transfer <chainName>,<o-account>,<amount>',
+      'Transfer token',
+      list
+    )
+    .option('-m, --mint <chainName>,<o-account>,<amount>', 'Mint token', list)
+    .option(
+      '-o, --omniBalance <chainName>,<o-account>',
+      'Query the balance of the omniverse token',
+      list
+    )
+    .option('-b, --burn <chainName>,<tokenId>,<amount>', 'Burn token', list)
+    .option(
+      '-s, --switch <index>',
+      'Switch the index of private key to be used'
+    )
+    .option('-a, --account', 'Show the account information')
+    .option('-c, --claim <chainName>,<tokenId>,<itemId>', 'Get test token from faucet', list)
+    .option(
+      '-n, --ownerOf <chainName>,<tokenId>,<itemId>',
+      'Get the owner of an item',
+      list
+    )
+    .option(
+      '-g, --generateTx <tokenId>,<o-account>,<amount>',
+      'Generate a encapsulated Tx Data',
+      list
+    )
+    .option(
+      '-x2y, --swapX2Y <tradingPair>,<amount>',
+      'Swap `amount` X token to Y token',
+      list
+    )
+    .option(
+      '-y2x, --swapY2X <tradingPair>,<amount>',
+      'Swap `amount` Y token to X token',
+      list
+    )
+    .option(
+      '-p, --pallet',
+      'pallet name'
+    )
+    .parse(process.argv);
+    
+  let palletName = program.opts().pallet ? 'uniques' : 'assets';
 
-    if (program.opts().account) {
-        await accountInfo();
+  if (program.opts().account) {
+    await accountInfo();
+  } else if (program.opts().transfer) {
+    if (program.opts().transfer.length != 3) {
+      console.log(
+        '3 arguments are needed, but ' +
+          program.opts().transfer.length +
+          ' provided'
+      );
+      return;
     }
-    else if (program.opts().transfer) {
-        if (program.opts().transfer.length != 3) {
-            console.log('3 arguments are needed, but ' + program.opts().transfer.length + ' provided');
-            return;
-        }
-        
-        if (!await init()) {
-            return;
-        }
-        let tx = await transfer(program.opts().transfer[0], program.opts().transfer[1], program.opts().transfer[2]);
-        let result = await api.tx.assets.sendTransaction(program.opts().transfer[0], tx).signAndSend(sender);
-        console.log(result.toJSON());
+    if (!(await init(program.opts().transfer[0]))) {
+      return;
     }
-    else if (program.opts().mint) {
-        if (program.opts().mint.length != 3) {
-            console.log('3 arguments are needed, but ' + program.opts().mint.length + ' provided');
-            return;
-        }
-        
-        if (!await init()) {
-            return;
-        }
-        await mint(program.opts().mint[0], program.opts().mint[1], program.opts().mint[2]);
+    await sendTransaction(
+      tokenId,
+      program.opts().transfer[1],
+      program.opts().transfer[2],
+      TRANSFER,
+      palletName
+    );
+  } else if (program.opts().mint) {
+    if (program.opts().mint.length != 3) {
+      console.log(
+        '4 arguments are needed, but ' +
+          program.opts().mint.length +
+          ' provided'
+      );
+      return;
     }
-    else if (program.opts().omniBalance) {
-        if (program.opts().omniBalance.length > 2) {
-            console.log('2 arguments are needed, but ' + program.opts().omniBalance.length + ' provided');
-            return;
-        }
-        let account;
-        if (program.opts().omniBalance.length == 2) {
-            account = program.opts().omniBalance[1];
-        } else {
-            account = publicKey;
-        }
-        
-        if (!await init()) {
-            return;
-        }
-        let amount = await omniverseBalanceOf(program.opts().omniBalance[0], account);
-        console.log('amount', amount.toHuman());
-    }
-    else if (program.opts().switch) {
-        secret.index = parseInt(program.opts().switch);
-        fs.writeFileSync('./.secret', JSON.stringify(secret, null, '\t'));
-    }
-    else if (program.opts().claim) {
-        if (program.opts().claim.length != 1) {
-            console.log('1 arguments are needed, but ' + program.opts().mint.length + ' provided');
-            return;
-        }
 
-        await claim(program.opts().claim[0]);
+    if (!(await init(program.opts().mint[0]))) {
+      return;
     }
-    else if (program.opts().swapX2Y) {
-        if (program.opts().swapX2Y.length != 2) {
-            console.log('2 arguments are needed, but ' + program.opts().swapX2Y.length + ' provided');
-            return;
-        }
-
-        if (!await init()) {
-            return;
-        }
-
-        await swapX2Y(program.opts().swapX2Y[0], BigInt(program.opts().swapX2Y[1]));
+    await sendTransaction(
+      tokenId,
+      program.opts().mint[1],
+      program.opts().mint[2],
+      MINT,
+      palletName
+    );
+  } else if (program.opts().burn) {
+    if (program.opts().burn.length != 2) {
+      console.log(
+        '3 arguments are needed, but ' +
+          program.opts().burn.length +
+          ' provided'
+      );
+      return;
     }
-    else if (program.opts().swapY2X) {
-        if (program.opts().swapY2X.length != 2) {
-            console.log('2 arguments are needed, but ' + program.opts().swapY2X.length + ' provided');
-            return;
-        }
 
-        if (!await init()) {
-            return;
-        }
-
-        await swapY2X(program.opts().swapY2X[0], BigInt(program.opts().swapY2X[1]));
+    if (!(await init())) {
+      return;
     }
-    else if (program.opts().generateTx) {
-        if (program.opts().generateTx.length != 4) {
-            console.log('4 arguments are needed, but ' + program.opts().generateTx.length + ' provided');
-            return;
-        }
-        
-        if (!await init()) {
-            return;
-        }
-
-        await generateTxData(program.opts().generateTx[0], program.opts().generateTx[1], program.opts().generateTx[2], program.opts().generateTx[3]);
+    await sendTransaction(
+      program.opts().burn[0],
+      '0x',
+      program.opts().burn[1],
+      BURN,
+      palletName
+    );
+  } else if (program.opts().omniBalance) {
+    if (program.opts().omniBalance.length > 2) {
+      console.log(
+        '2 arguments are needed, but ' +
+          program.opts().omniBalance.length +
+          ' provided'
+      );
+      return;
     }
-}());
+    let account;
+    if (program.opts().omniBalance.length == 2) {
+      account = program.opts().omniBalance[1];
+    } else {
+      account = publicKey;
+    }
+
+    if (!(await init(program.opts().omniBalance[0]))) {
+      return;
+    }
+    let amount = await omniverseBalanceOf(
+      palletName,
+      tokenId,
+      account
+    );
+    console.log('amount', amount.toHuman());
+    api.disconnect();
+  } else if (program.opts().switch) {
+    secret.index = parseInt(program.opts().switch);
+    fs.writeFileSync('./.secret', JSON.stringify(secret, null, '\t'));
+  } else if (program.opts().claim) {
+    var itemId = null;
+    if (palletName == 'assets') {
+      if (program.opts().claim.length != 1) {
+        console.log(
+          '1 arguments are needed, but ' +
+            program.opts().claim.length +
+            ' provided'
+        );
+        return;
+      }
+    } else {
+      if (program.opts().claim.length != 2) {
+        console.log(
+          '2 arguments are needed, but ' +
+            program.opts().claim.length +
+            ' provided'
+        );
+        return;
+      }
+      itemId = program.opts().claim[1];
+    }
+    
+    await claim(palletName, program.opts().claim[0], itemId);
+  } else if (program.opts().ownerOf) {
+    if (program.opts().ownerOf.length != 3) {
+      console.log(
+        '3 arguments are needed, but ' +
+          program.opts().ownerOf.length +
+          ' provided'
+      );
+      return;
+    }
+
+    if (!(await init(program.opts().ownerOf[0]))) {
+      return;
+    }
+
+    await ownerOf(program.opts().ownerOf[1], program.opts().ownerOf[2]);
+  } else if (program.opts().swapX2Y) {
+    if (program.opts().swapX2Y.length != 2) {
+      console.log(
+        '2 arguments are needed, but ' +
+          program.opts().swapX2Y.length +
+          ' provided'
+      );
+      return;
+    }
+
+    if (!(await init())) {
+      return;
+    }
+
+    await swapX2Y(program.opts().swapX2Y[0], BigInt(program.opts().swapX2Y[1]));
+  } else if (program.opts().swapY2X) {
+    if (program.opts().swapY2X.length != 2) {
+      console.log(
+        '2 arguments are needed, but ' +
+          program.opts().swapY2X.length +
+          ' provided'
+      );
+      return;
+    }
+
+    if (!(await init())) {
+      return;
+    }
+
+    await swapY2X(program.opts().swapY2X[0], BigInt(program.opts().swapY2X[1]));
+  } else if (program.opts().generateTx) {
+    if (program.opts().generateTx.length != 4) {
+      console.log(
+        '4 arguments are needed, but ' +
+          program.opts().generateTx.length +
+          ' provided'
+      );
+      return;
+    }
+
+    if (!(await init())) {
+      return;
+    }
+
+    await generateTxData(
+      program.opts().generateTx[0],
+      program.opts().generateTx[1],
+      program.opts().generateTx[2],
+      program.opts().generateTx[3]
+    );
+  }
+})();
