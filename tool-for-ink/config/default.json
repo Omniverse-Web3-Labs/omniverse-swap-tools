@@ -1,0 +1,9 @@
+{
+  "INK": {
+    "nodeAddress": "ws://127.0.0.1:9944",
+		"omniverseChainId": "3",
+    "coolingDown": 1,
+    "metadataPath": "./res/Metadata.json",
+    "contractAddress": "xxx"
+  }
+}
