@@ -58,7 +58,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
       list
     )
     .option(
-      '-o, --omniBalance <chainName>,<o-account>',
+      '-o, --omniBalance <chainName>,<tokenId>,<o-account>',
       'Query the balance of the omniverse token',
       list
     )
