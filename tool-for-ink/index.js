@@ -1,4 +1,3 @@
-const BN = require('bn.js');
 const fs = require('fs');
 const { program } = require('commander');
 const utils = require('./utils');
@@ -6,9 +5,12 @@ const eccrypto = require('eccrypto');
 const keccak256 = require('keccak256');
 const secp256k1 = require('secp256k1');
 const { ApiPromise, HttpProvider, Keyring, WsProvider } = require('@polkadot/api');
+const { BN, BN_ONE } = require("@polkadot/util");
+const { ContractPromise } = require('@polkadot/api-contract');
 const request = require('request');
 const { u8, u128, Struct, Vector, Bytes } = require('scale-ts');
 const config = require('config');
+const ink = require('./ink.js');
 
 // EVM
 const Web3 = require('web3');
@@ -25,6 +27,7 @@ const BURN = 2;
 
 let api;
 let chainId;
+let netConfig;
 let omniverseContract;
 
 // Private key
@@ -38,7 +41,7 @@ let keyring = new Keyring({ type: 'ecdsa' });
 let sender = keyring.addFromSeed(privateKeyBuffer);
 
 async function init(chainName) {
-  let netConfig = config.get(chainName);
+  netConfig = config.get(chainName);
   if (!netConfig) {
       console.log('Config of chain (' + chainName + ') not exists');
       return false;
@@ -47,8 +50,8 @@ async function init(chainName) {
   const provider = new WsProvider(netConfig.nodeAddress);
   api = await ApiPromise.create({ provider, noInitWarn: true });
   chainId = netConfig.omniverseChainId;
-  let metadata = JSON.parse(fs.readFileSync(netConfig.metadataPath);
-  omniverseContract = new ContractPromise(api, metadata, netConfig.contractAddress);
+  let metadata = JSON.parse(fs.readFileSync(netConfig.metadataPath));
+  omniverseContract = new ContractPromise(api, metadata, netConfig.omniverseContractAddress);
   return true;
 }
 
@@ -68,12 +71,16 @@ let getRawData = (txData) => {
   let bData = Buffer.concat([
     Buffer.from(new BN(txData.nonce).toString('hex').padStart(32, '0'), 'hex'),
     Buffer.from(new BN(txData.chainId).toString('hex').padStart(8, '0'), 'hex'),
-    Buffer.from(txData.initiatorAddress, 'utf-8'),
+    Buffer.from(txData.initiateSc.slice(2), 'hex'),
     Buffer.from(txData.from.slice(2), 'hex'),
   ]);
   console.log(bData);
 
   let fungible = Fungible.dec(txData.payload);
+  console.log('Buffer.from([fungible.op])', fungible, Buffer.from([fungible.op]), Buffer.from(fungible.ex_data), Buffer.from(
+    new BN(fungible.amount).toString('hex').padStart(32, '0'),
+    'hex'
+  ))
   bData = Buffer.concat([bData, Buffer.from([fungible.op])]);
 
   bData = Buffer.concat([bData, Buffer.from(fungible.ex_data)]);
@@ -89,81 +96,35 @@ let getRawData = (txData) => {
 };
 
 async function initialize(members) {
-  await omniverseContract.tx
-    .setCoolingDown(netConfig.coolingDown)
-    .signAndSend(sender, async({ status, events }) => {
-      if (status.isInBlock || status.isFinalized) {
-        events
-          // find/filter for failed events
-          .filter(({ event }) =>
-            api.events.system.ExtrinsicFailed.is(event)
-          )
-          // we know that data for system.ExtrinsicFailed is
-          // (DispatchError, DispatchInfo)
-          .forEach(({ event: { data: [error, info] } }) => {
-            if (error.isModule) {
-              // for module errors, we have the section indexed, lookup
-              const decoded = api.registry.findMetaError(error.asModule);
-              const { docs, method, section } = decoded;
-  
-              console.log(`${section}.${method}: ${docs.join(' ')}`);
-            } else {
-              // Other, CannotLookup, BadOrigin, no extra info
-              console.log(error.toString());
-            }
-          });
-        if (status.isInBlock) {
-          await api.disconnect();
-        }
-      }
-    });
-  await omniverseContract.tx
-    .setMembers(members)
-    .signAndSend(sender, async({ status, events }) => {
-      if (status.isInBlock || status.isFinalized) {
-        events
-          // find/filter for failed events
-          .filter(({ event }) =>
-            api.events.system.ExtrinsicFailed.is(event)
-          )
-          // we know that data for system.ExtrinsicFailed is
-          // (DispatchError, DispatchInfo)
-          .forEach(({ event: { data: [error, info] } }) => {
-            if (error.isModule) {
-              // for module errors, we have the section indexed, lookup
-              const decoded = api.registry.findMetaError(error.asModule);
-              const { docs, method, section } = decoded;
-  
-              console.log(`${section}.${method}: ${docs.join(' ')}`);
-            } else {
-              // Other, CannotLookup, BadOrigin, no extra info
-              console.log(error.toString());
-            }
-          });
-        if (status.isInBlock) {
-          await api.disconnect();
-        }
-      }
-    });
+  let ret = await ink.sendTransaction(
+    omniverseContract, 'omniverse::setCoolingDown', sender, [netConfig.coolingDown]);
+  if (!ret) {
+    // Error
+  }
+  ret = await ink.sendTransaction(
+    omniverseContract, 'fungibleToken::setMembers', sender, [members]);
+  if (!ret) {
+    // Error
+  }
 }
 
 async function sendTransaction(to, amount, op) {
-  let nonce = await omniverseContract.query.getTransactionCount(
-    publicKey
-  );
+  let nonce = await ink.contractCall(omniverseContract, "omniverse::getTransactionCount", sender.address, [publicKey]);
+  console.log('nonce', nonce)
   let payload = Fungible.enc({
     op: op,
     ex_data: Array.from(Buffer.from(to.slice(2), 'hex')),
     amount: BigInt(amount),
   });
-  console.log('omniverseContract', omniverseContract);
+  
   let txData = {
-    nonce: nonce.toJSON(),
+    nonce: parseInt(nonce.toString()),
     chainId: chainId,
-    initiateSC: omniverseContract.address,
+    initiateSc: '0x' + Buffer.from(netConfig.omniverseContractAddress).toString('hex'),
     from: publicKey,
-    payload: utils.toHexString(Array.from(payload)),
+    payload: utils.toHexString(payload),
   };
+  // console.log('getRawData', txData);api.disconnect();return;
   // console.log(Buffer.from(txData.to.replace('0x', ''), 'hex'));
   let bData = getRawData(txData);
   let hash = keccak256(bData);
@@ -175,39 +136,17 @@ async function sendTransaction(to, amount, op) {
   console.log(txData.signature);
   // test end
   console.log(txData);
-  await omniverseContract.tx
-    .sendOmniverseTransaction(txData)
-    .signAndSend(sender, async({ status, events }) => {
-      if (status.isInBlock || status.isFinalized) {
-        events
-          // find/filter for failed events
-          .filter(({ event }) =>
-            api.events.system.ExtrinsicFailed.is(event)
-          )
-          // we know that data for system.ExtrinsicFailed is
-          // (DispatchError, DispatchInfo)
-          .forEach(({ event: { data: [error, info] } }) => {
-            if (error.isModule) {
-              // for module errors, we have the section indexed, lookup
-              const decoded = api.registry.findMetaError(error.asModule);
-              const { docs, method, section } = decoded;
-  
-              console.log(`${section}.${method}: ${docs.join(' ')}`);
-            } else {
-              // Other, CannotLookup, BadOrigin, no extra info
-              console.log(error.toString());
-            }
-          });
-        if (status.isInBlock) {
-          await api.disconnect();
-        }
-      }
-    });
+  let ret = await ink.sendTransaction(
+    omniverseContract, 'fungibleToken::sendOmniverseTransaction', sender, [txData]);
+  if (!ret) {
+    // Error
+  }
   // console.log(result.toJSON());
+  api.disconnect();
 }
 
 async function omniverseBalanceOf(pk) {
-  let amount = await omniverseContract.query.balanceOf(pk);
+  let amount = await ink.contractCall(omniverseContract, "fungibleToken::balanceOf", sender.address, [pk]);
   return amount;
 }
 
@@ -295,6 +234,7 @@ async function accountInfo() {
     await initialize(
       members
     );
+    api.disconnect();
   } else if (program.opts().transfer) {
     if (program.opts().transfer.length != 3) {
       console.log(
@@ -370,7 +310,7 @@ async function accountInfo() {
     let amount = await omniverseBalanceOf(
       account
     );
-    console.log('amount', amount.toHuman());
+    console.log('amount', amount);
     api.disconnect();
   } else if (program.opts().switch) {
     secret.index = parseInt(program.opts().switch);
