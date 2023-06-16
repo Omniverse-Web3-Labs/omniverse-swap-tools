@@ -40,7 +40,7 @@ let publicKey = '0x' + publicKeyBuffer.toString('hex').slice(2);
 let keyring = new Keyring({ type: 'ecdsa' });
 let sender = keyring.addFromSeed(privateKeyBuffer);
 
-async function init(chainName) {
+async function init(chainName, tokenId) {
   netConfig = config.get(chainName);
   if (!netConfig) {
       console.log('Config of chain (' + chainName + ') not exists');
@@ -51,7 +51,7 @@ async function init(chainName) {
   api = await ApiPromise.create({ provider, noInitWarn: true });
   chainId = netConfig.omniverseChainId;
   let metadata = JSON.parse(fs.readFileSync(netConfig.metadataPath));
-  omniverseContract = new ContractPromise(api, metadata, netConfig.omniverseContractAddress);
+  omniverseContract = new ContractPromise(api, metadata, netConfig.omniverseContractAddress[tokenId]);
   return true;
 }
 
@@ -202,9 +202,10 @@ async function accountInfo() {
       'Switch the index of private key to be used'
     )
     .option('-a, --account', 'Show the account information')
+    .option('-ti, --tokenId', 'The omniverse token id')
     .parse(process.argv);
     
-
+  let tokenId = program.opts().account;
   if (program.opts().account) {
     await accountInfo();
   } else if (program.opts().initialize) {
@@ -217,7 +218,7 @@ async function accountInfo() {
       return;
     }
     
-    if (!(await init(program.opts().initialize[0]))) {
+    if (!(await init(program.opts().initialize[0], tokenId))) {
       return;
     }
 
@@ -244,7 +245,7 @@ async function accountInfo() {
       );
       return;
     }
-    if (!(await init(program.opts().transfer[0]))) {
+    if (!(await init(program.opts().transfer[0], tokenId))) {
       return;
     }
     await sendTransaction(
@@ -262,7 +263,7 @@ async function accountInfo() {
       return;
     }
 
-    if (!(await init(program.opts().mint[0]))) {
+    if (!(await init(program.opts().mint[0], tokenId))) {
       return;
     }
     await sendTransaction(
@@ -280,7 +281,7 @@ async function accountInfo() {
       return;
     }
 
-    if (!(await init(program.opts().mint[0]))) {
+    if (!(await init(program.opts().mint[0], tokenId))) {
       return;
     }
     await sendTransaction(
@@ -304,7 +305,7 @@ async function accountInfo() {
       account = publicKey;
     }
 
-    if (!(await init(program.opts().omniBalance[0]))) {
+    if (!(await init(program.opts().omniBalance[0], tokenId))) {
       return;
     }
     let amount = await omniverseBalanceOf(
