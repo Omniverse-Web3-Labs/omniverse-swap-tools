@@ -310,7 +310,7 @@ async function accountInfo() {
     let amount = await omniverseBalanceOf(
       account
     );
-    console.log('amount', amount);
+    console.log('amount', amount.toString());
     api.disconnect();
   } else if (program.opts().switch) {
     secret.index = parseInt(program.opts().switch);
