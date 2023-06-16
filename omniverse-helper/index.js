@@ -295,7 +295,6 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
     let chainName = program.opts().deposit[0];
     let tokenId = program.opts().deposit[1];
     let amount = program.opts().deposit[2];
-    console.log(chainName, tokenId, amount);
     if (await init(chainName)) {
       let mpc = (await api.query.omniverseSwap.mpc()).toHuman();
       let remainBalance = await omniverseBalanceOf(
@@ -413,9 +412,9 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
       return;
     }
   } else if (program.opts().swapY2X) {
-    if (program.opts().swapY2X.length != 2) {
+    if (program.opts().swapY2X.length != 3) {
       console.log(
-        '2 arguments are needed, but ' +
+        '3 arguments are needed, but ' +
           program.opts().swapY2X.length +
           ' provided'
       );
@@ -423,7 +422,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
     }
     let chainName = program.opts().swapY2X[0];
     let tradingPairId = program.opts().swapY2X[1];
-    let amount = program.opts().swapY2X[2];
+    let tokenSold = BigInt(program.opts().swapY2X[2]);
     if (await init(chainName)) {
       let pair = (
         await api.query.omniverseSwap.tradingPairs(tradingPairId)
@@ -442,7 +441,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
         if (BigInt(remainBalance.toJSON()) < tokenSold) {
           console.log('Deposit omniverse token not enough.');
         } else {
-          await swapY2X(tradingPairId, pair, amount);
+          await swapY2X(tradingPairId, pair, tokenSold);
           return;
         }
       }
