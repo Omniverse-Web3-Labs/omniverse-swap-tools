@@ -63,7 +63,7 @@ module.exports = {
           });
         const { gasRequired, result, output } = await contract.query[method](from, {gasLimit, storageDepositLimit}, ...arguments);
         if (result.isOk) {
-            console.log('result ok');
+            // console.log('result ok');
             return output.asOk;
         }
         else {
