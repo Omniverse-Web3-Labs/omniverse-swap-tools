@@ -167,7 +167,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
   } else if (program.opts().mint) {
     if (program.opts().mint.length != 4) {
       console.log(
-        '3 arguments are needed, but ' +
+        '4 arguments are needed, but ' +
           program.opts().mint.length +
           ' provided'
       );
@@ -182,9 +182,9 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
     }
     return;
   } else if (program.opts().burn) {
-    if (program.opts().burn.length != 3) {
+    if (program.opts().burn.length != 4) {
       console.log(
-        '3 arguments are needed, but ' +
+        '4 arguments are needed, but ' +
           program.opts().burn.length +
           ' provided'
       );
@@ -192,11 +192,12 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
     }
     let chainName = program.opts().burn[0];
     let tokenId = program.opts().burn[1];
-    let amount = program.opts().burn[2];
+    let account = program.opts().burn[2]
+    let amount = program.opts().burn[3];
     if (await init(chainName)) {
       await sendOmniverseTransaction(
         tokenId,
-        '0x',
+        account,
         amount,
         BURN,
         palletName
