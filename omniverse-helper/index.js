@@ -193,8 +193,7 @@ let sender = keyring.addFromSeed(privateKeyBuffer);
     let chainName = program.opts().burn[0];
     let tokenId = program.opts().burn[1];
     let amount = program.opts().burn[2];
-    if (!(await init(chainName))) {
-
+    if (await init(chainName)) {
       await sendOmniverseTransaction(
         tokenId,
         '0x',
