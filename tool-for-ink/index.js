@@ -312,7 +312,7 @@ async function accountInfo() {
       return;
     }
 
-    if (!(await init(program.opts().mint[0], tokenId))) {
+    if (!(await init(program.opts().burn[0], tokenId))) {
       return;
     }
     await sendTransaction(program.opts().burn[1], program.opts().burn[2], BURN);
